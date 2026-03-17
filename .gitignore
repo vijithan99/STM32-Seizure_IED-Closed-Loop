@@ -1,0 +1,38 @@
+# ========================
+# STM32 Firmware (CubeIDE)
+# ========================
+
+# Build output
+firmware/**/Debug/
+firmware/**/Release/
+
+# CubeIDE metadata
+firmware/**/.settings/
+firmware/**/.metadata/
+firmware/**/*.launch
+
+# Object / binary files
+*.o
+*.elf
+*.map
+*.bin
+*.hex
+*.list
+*.su
+
+# ========================
+# Python
+# ========================
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# ========================
+# OS / Editor junk
+# ========================
+
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
