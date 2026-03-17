@@ -9,20 +9,37 @@
 
 static inline float fmaxf_local(float a, float b) { return (a > b) ? a : b;}
 
-int32_t line_length(const int32_t *x, uint32_t n){
-	// line length is the subtraction of each pair of consecutive samples
-	// Change n into the buffer size name later
-	if (!x || n < 2) return 0;
+stat_features_t calc_process_block(const int32_t *x, uint32_t n){
+    stat_features_t f = {0};
 
-	int32_t ll = 0;
-	for (uint32_t i = 1; i < n; i++) {
-		int32_t diff = (int32_t)x[i] - (int32_t)x[i - 1];
+    if (!x || n < 2) return f;
 
-		if (diff < 0) diff = -diff;
-		ll += diff;
-	}
+    int32_t ll = 0;
+    int64_t sum_sq = 0;
 
-	return ll;
+    for (uint32_t i = 0; i < n; i++) {
+        update_rms_sum(x[i], &sum_sq);
+
+        if (i > 0) {
+            update_line_length(x[i], x[i - 1], &ll);
+        }
+    }
+
+    f.ll = ll;
+    f.rms = sqrtf((float)sum_sq / (float)n);
+
+    return f;
+}
+
+static inline void update_line_length(int32_t current, int32_t previous, int32_t *ll){
+    int32_t diff = current - previous;
+
+    if (diff < 0) diff = -diff;
+    *ll += diff;
+}
+
+static inline void update_rms_sum(int32_t sample, int64_t *sum_sq){
+    *sum_sq += (int64_t)sample * sample;
 }
 
 void detect_init(detect_state_t *st, const detect_params_t *p){
@@ -38,6 +55,7 @@ void detect_init(detect_state_t *st, const detect_params_t *p){
     st->sample_count = 0;
 
     st->last_ll = 0;
+    st->last_rms = 0;
     st->last_thresh = 0.0f;
 }
 
@@ -53,7 +71,8 @@ detect_event_t detect_process_block(detect_state_t *st, const int32_t *x, uint32
     }
 
     // Compute feature
-    int32_t ll_i32 = line_length(x, n);
+    stat_features_t ft = calc_process_block(x, n);
+    int32_t ll_i32 = ft.ll;
     st->last_ll = ll_i32;
 
     float ll = (float)ll_i32;
@@ -102,40 +121,4 @@ detect_event_t detect_process_block(detect_state_t *st, const int32_t *x, uint32
     return DETECT_NO_EVENT;
 }
 
-/*
-int16_t thresh_cross(const int32_t *line_length, uint32_t SIZE, detect_event_t *SEIZURE_STATE, int multiplier){
-	// Check if threshold is crossed and indicate the state
-	// Line Length is the array of line lengths calculated over time
 
-	uint32_t sum = 0;
-	uint32_t value = 0;
-	int count = 0;
-
-	for (uint32_t i = 0; i < SIZE; i++){
-		sum += (int32_t)line_length[i];
-	}
-
-	uint32_t mean = sum/SIZE;
-
-	for (uint32_t i = 0; i < SIZE; i++){
-		value += pow(((int32_t)line_length[i] - mean), 2);
-	}
-
-	uint32_t standardDeviation = value/SIZE;
-	uint32_t threshold = mean + standardDeviation * multiplier;
-
-	for (uint32_t i = 0; i < SIZE; i++){
-		if ((uint32_t) line_length[i] > threshold){
-			count += 1;
-		}
-		else{
-			count = 0;
-		}
-
-
-	}
-
-	return 0;
-}
-
-*/

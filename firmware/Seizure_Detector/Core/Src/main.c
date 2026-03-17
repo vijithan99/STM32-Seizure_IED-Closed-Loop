@@ -128,6 +128,10 @@ int main(void)
             ev = detect_process_block(&detect_state, ping_ptr, BLOCK_SIZE, block_time_us);
             block_time_us += BLOCK_PERIOD_US;
 
+            if (ev == DETECT_SEIZURE_ONSET) {
+                    BSP_LED_Toggle(LED_RED);
+                    printf("SEIZURE DETECTED at %lu us (ping)\r\n", block_time_us);
+                }
             // process ping block here
         }
 
@@ -137,13 +141,14 @@ int main(void)
             ev = detect_process_block(&detect_state, pong_ptr, BLOCK_SIZE, block_time_us);
             block_time_us += BLOCK_PERIOD_US;
 
+            if (ev == DETECT_SEIZURE_ONSET) {
+                    BSP_LED_Toggle(LED_RED);
+                    printf("SEIZURE DETECTED at %lu us (pong)\r\n", block_time_us);
+                }
             // process pong block here
         }
 
-        if (ev == DETECT_SEIZURE_ONSET) {
-            BSP_LED_Toggle(LED_RED);
-            printf("SEIZURE DETECTED at %lu us\r\n", block_time_us);
-        }
+
     }
 }
 

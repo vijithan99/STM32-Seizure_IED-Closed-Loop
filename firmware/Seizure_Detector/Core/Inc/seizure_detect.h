@@ -9,6 +9,11 @@
 #ifndef SRC_SEIZURE_DETECT_H_
 #define SRC_SEIZURE_DETECT_H_
 
+typedef struct {
+    int32_t ll;
+    float rms;
+} stat_features_t;
+
 typedef enum {
 	DETECT_NO_EVENT = 0,
 	DETECT_SEIZURE_ONSET = 1
@@ -39,10 +44,16 @@ typedef struct {
 
     // Debug/telemetry
     int32_t last_ll;
+    float last_rms;
     float last_thresh;
 } detect_state_t;
 
-int32_t line_length(const int32_t *x, uint32_t n);
+// Feature Calc
+stat_features_t calc_process_block(const int32_t *x, uint32_t n);
+static inline void update_line_length(int32_t current, int32_t previous, int32_t *ll);
+static inline void update_rms_sum(int32_t sample, int64_t *sum_sq);
+
+// Process Block
 void detect_init(detect_state_t *st, const detect_params_t *p);
 detect_event_t detect_process_block(detect_state_t *st,
                                     const int32_t *x,
