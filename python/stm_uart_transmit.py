@@ -22,8 +22,22 @@ abf_dir = os.path.join(current_dir, "seizureData")
 # ----------------------------
 # Settings
 # ----------------------------
-GAIN = 1000       # scale float ABF values into int range
-BLOCK_SIZE = 500    # match your MCU test for now
+GAIN = 1000
+BLOCK_SIZE = 1000
+
+DETECTED_TIMES = []
+
+def line_parse(line):
+    segments = line.split(',')
+    if len(segments) < 2:
+        return None
+
+    try:
+        time_us = int(segments[1].strip())
+    except ValueError:
+        return None
+
+    return time_us / 1e6
 
 def convert_sample_to_24bit_bytes(sample_float):
     """
@@ -75,13 +89,14 @@ print("Sampling rate:", fs)
 print("Total samples:", len(dataY))
 
 # ----------------------------
-# Plot
+# Plot original waveform
 # ----------------------------
-plt.figure()
-plt.plot(dataX, dataY)
+plt.figure(figsize=(12, 4))
+plt.plot(dataX, dataY, linewidth=0.8)
 plt.title(os.path.basename(abf_path))
 plt.xlabel("Time (s)")
 plt.ylabel("Signal")
+plt.tight_layout()
 plt.show(block=False)
 
 # ----------------------------
@@ -105,13 +120,44 @@ try:
 
         # Read back anything STM printed
         while ser.in_waiting > 0:
-            line = ser.readline()
-            if not line:
+            raw_line = ser.readline()
+            if not raw_line:
                 break
-            print("STM says:", line.decode(errors="ignore").strip())
+
+            line = raw_line.decode(errors="ignore").strip()
+            print("STM says:", line)
+
+            detect_time = line_parse(line)
+            if detect_time is not None:
+                DETECTED_TIMES.append(detect_time)
 
         # Simulate real-time playback
         time.sleep(block_duration)
 
 finally:
     ser.close()
+
+# ----------------------------
+# Plot waveform with vertical detection lines
+# ----------------------------
+print("Detected times (s):", DETECTED_TIMES)
+
+fig, ax = plt.subplots(figsize=(14, 5))
+ax.plot(dataX, dataY, linewidth=0.8, label="Waveform")
+
+# only draw lines that fall within the ABF time range
+valid_detect_times = [t for t in DETECTED_TIMES if dataX[0] <= t <= dataX[-1]]
+
+for i, t in enumerate(valid_detect_times):
+    if i == 0:
+        ax.axvline(x=t, linestyle="--", linewidth=1.2, label="STM detection", c="red")
+    else:
+        ax.axvline(x=t, linestyle="--", linewidth=1.2, c="red")
+
+ax.set_title(f"Waveform with STM32 seizure detections: {os.path.basename(abf_path)}")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("Signal")
+ax.legend()
+
+fig.tight_layout() 
+plt.show()

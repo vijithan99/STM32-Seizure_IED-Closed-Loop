@@ -54,6 +54,8 @@ void detect_init(detect_state_t *st, const detect_params_t *p){
     st->refractory_until_us = 0;
     st->sample_count = 0;
 
+    st->warmup_count = 0;
+
     st->last_ll = 0;
     st->last_rms = 0;
     st->last_thresh = 0.0f;

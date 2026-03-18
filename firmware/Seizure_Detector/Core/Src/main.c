@@ -28,8 +28,8 @@ COM_InitTypeDef BspCOMInit;
 __IO uint32_t BspButtonState = BUTTON_RELEASED;
 
 /* USER CODE BEGIN 0 */
-#define BLOCK_SIZE 500
-#define SAMP_FREQ 5000
+#define BLOCK_SIZE 1000
+#define SAMP_FREQ 10000
 #define SAMP_PERIOD_US (1000000U / SAMP_FREQ)
 #define BLOCK_PERIOD_US ((BLOCK_SIZE * 1000000U) / SAMP_FREQ)
 /* USER CODE END 0 */
@@ -48,10 +48,10 @@ int main(void)
     // Intialization detection structs
     detect_params_t detect_params = {
         .alpha = 0.01f,
-        .k = 5.0f,
+        .k = 3.5f,
         .min_std = 1.0f,
         .persist_blocks = 5,
-        .warmup_blocks = 100,
+        .warmup_blocks = 80,
         .refractory_us = 500000
     };
     detect_state_t detect_state;
@@ -126,26 +126,26 @@ int main(void)
             input_buf.ping_ready = 0;
             ping_ptr = buffer_get_ping_ptr(&input_buf);
             ev = detect_process_block(&detect_state, ping_ptr, BLOCK_SIZE, block_time_us);
-            block_time_us += BLOCK_PERIOD_US;
 
             if (ev == DETECT_SEIZURE_ONSET) {
-                    BSP_LED_Toggle(LED_RED);
-                    printf("SEIZURE DETECTED at %lu us (ping)\r\n", block_time_us);
-                }
+				BSP_LED_Toggle(LED_RED);
+				printf("SEIZURE DETECTED (ping),%lu\r\n", block_time_us);
+            }
             // process ping block here
+            block_time_us += BLOCK_PERIOD_US;
         }
 
         if (input_buf.pong_ready){
             input_buf.pong_ready = 0;
             pong_ptr = buffer_get_pong_ptr(&input_buf);
             ev = detect_process_block(&detect_state, pong_ptr, BLOCK_SIZE, block_time_us);
-            block_time_us += BLOCK_PERIOD_US;
 
             if (ev == DETECT_SEIZURE_ONSET) {
-                    BSP_LED_Toggle(LED_RED);
-                    printf("SEIZURE DETECTED at %lu us (pong)\r\n", block_time_us);
-                }
+            	BSP_LED_Toggle(LED_RED);
+            	printf("SEIZURE DETECTED (pong),%lu\r\n", block_time_us);
+            }
             // process pong block here
+            block_time_us += BLOCK_PERIOD_US;
         }
 
 

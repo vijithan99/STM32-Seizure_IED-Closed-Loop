@@ -20,11 +20,11 @@ typedef enum {
 } detect_event_t;
 
 typedef struct {
-    float k;                  // threshold = mean + k*std
+	float alpha;              // EMA rate for baseline (e.g., 0.01f)
+	float k;                  // threshold = mean + k*std
     uint8_t persist_blocks;    // how many consecutive blocks required (e.g., 3)
     uint32_t warmup_blocks;		// Blocks at the beginning of recording that allow for baseline calculation of the data.
     uint32_t refractory_us;    // refractory in microseconds
-    float alpha;              // EMA rate for baseline (e.g., 0.01f)
     float min_std;            // floor to avoid tiny std (e.g., 1.0f)
 } detect_params_t;
 
