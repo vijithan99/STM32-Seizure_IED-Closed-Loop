@@ -29,7 +29,7 @@ __IO uint32_t BspButtonState = BUTTON_RELEASED;
 
 /* USER CODE BEGIN 0 */
 #define BLOCK_SIZE 1000
-#define SAMP_FREQ 10000
+#define SAMP_FREQ 5000
 #define SAMP_PERIOD_US (1000000U / SAMP_FREQ)
 #define BLOCK_PERIOD_US ((BLOCK_SIZE * 1000000U) / SAMP_FREQ)
 /* USER CODE END 0 */
@@ -37,6 +37,29 @@ __IO uint32_t BspButtonState = BUTTON_RELEASED;
 void SystemClock_Config(void);
 static void MPU_Config(void);
 static void MX_GPIO_Init(void);
+
+static void handle_detect_event(detect_event_t ev, const char *block_name, uint32_t block_time_us){
+	switch (ev) {
+		case DETECT_SEIZURE_ONSET_LL:
+            BSP_LED_Toggle(LED_GREEN);
+            printf("LL DETECTED (%s), %lu\r\n", block_name, block_time_us);
+            break;
+
+        case DETECT_SEIZURE_ONSET_RMS:
+            BSP_LED_Toggle(LED_YELLOW);
+            printf("RMS DETECTED (%s), %lu\r\n", block_name, block_time_us);
+            break;
+
+        case DETECT_SEIZURE_ONSET_BOTH:
+            BSP_LED_Toggle(LED_RED);
+            printf("BOTH DETECTED (%s), %lu\r\n", block_name, block_time_us);
+            break;
+
+        case DETECT_NO_EVENT:
+        default:
+            break;
+    }
+}
 
 int main(void)
 {
@@ -48,7 +71,8 @@ int main(void)
     // Intialization detection structs
     detect_params_t detect_params = {
         .alpha = 0.01f,
-        .k = 3.5f,
+        .k_ll = 3.00f,
+		.k_rms = 2.75f,
         .min_std = 1.0f,
         .persist_blocks = 5,
         .warmup_blocks = 80,
@@ -127,10 +151,7 @@ int main(void)
             ping_ptr = buffer_get_ping_ptr(&input_buf);
             ev = detect_process_block(&detect_state, ping_ptr, BLOCK_SIZE, block_time_us);
 
-            if (ev == DETECT_SEIZURE_ONSET) {
-				BSP_LED_Toggle(LED_RED);
-				printf("SEIZURE DETECTED (ping),%lu\r\n", block_time_us);
-            }
+            handle_detect_event(ev, "ping", block_time_us);
             // process ping block here
             block_time_us += BLOCK_PERIOD_US;
         }
@@ -140,10 +161,7 @@ int main(void)
             pong_ptr = buffer_get_pong_ptr(&input_buf);
             ev = detect_process_block(&detect_state, pong_ptr, BLOCK_SIZE, block_time_us);
 
-            if (ev == DETECT_SEIZURE_ONSET) {
-            	BSP_LED_Toggle(LED_RED);
-            	printf("SEIZURE DETECTED (pong),%lu\r\n", block_time_us);
-            }
+            handle_detect_event(ev, "pong", block_time_us);
             // process pong block here
             block_time_us += BLOCK_PERIOD_US;
         }

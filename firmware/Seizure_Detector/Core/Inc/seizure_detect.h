@@ -16,12 +16,15 @@ typedef struct {
 
 typedef enum {
 	DETECT_NO_EVENT = 0,
-	DETECT_SEIZURE_ONSET = 1
+	DETECT_SEIZURE_ONSET_LL = 1,
+	DETECT_SEIZURE_ONSET_RMS = 2,
+	DETECT_SEIZURE_ONSET_BOTH = 3
 } detect_event_t;
 
 typedef struct {
 	float alpha;              // EMA rate for baseline (e.g., 0.01f)
-	float k;                  // threshold = mean + k*std
+	float k_ll;                  // threshold for line length = mean + k*std
+	float k_rms;                  // threshold for RMS = mean + k*std
     uint8_t persist_blocks;    // how many consecutive blocks required (e.g., 3)
     uint32_t warmup_blocks;		// Blocks at the beginning of recording that allow for baseline calculation of the data.
     uint32_t refractory_us;    // refractory in microseconds
@@ -32,11 +35,17 @@ typedef struct {
     detect_params_t p;
 
     // Baseline estimates of LL
-    float mean;
-    float var;                // variance estimate
+    float ll_mean;
+    float ll_var;                // variance estimate
+
+    // Baseline estimates of RMS
+	float rms_mean;
+	float rms_var;                // variance estimate
 
     // Decision state
-    uint8_t above_count;
+    uint8_t ll_above_count;
+    uint8_t rms_above_count;
+
     uint32_t refractory_until_us;
     uint64_t sample_count;		// Final sample of the block
 
@@ -45,15 +54,13 @@ typedef struct {
     // Debug/telemetry
     int32_t last_ll;
     float last_rms;
-    float last_thresh;
+    float last_ll_thresh;
+    float last_rms_thresh;
 } detect_state_t;
+
 
 // Feature Calc
 stat_features_t calc_process_block(const int32_t *x, uint32_t n);
-static inline void update_line_length(int32_t current, int32_t previous, int32_t *ll);
-static inline void update_rms_sum(int32_t sample, int64_t *sum_sq);
-
-// Process Block
 void detect_init(detect_state_t *st, const detect_params_t *p);
 detect_event_t detect_process_block(detect_state_t *st,
                                     const int32_t *x,
@@ -61,3 +68,6 @@ detect_event_t detect_process_block(detect_state_t *st,
                                     uint32_t t_us);
 
 #endif /* SRC_SEIZURE_DETECT_H_ */
+
+
+
