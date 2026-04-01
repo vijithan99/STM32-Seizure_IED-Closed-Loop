@@ -157,13 +157,13 @@ detect_event_t detect_process_block(detect_state_t *st, const int32_t *x, uint32
 
     if (ll_persisted) {
         st->ll_above_count = 0;
-        st->refractory_until_us = t_us + st->p.refractory_us;
+        //st->refractory_until_us = t_us + st->p.refractory_us;
         return DETECT_SEIZURE_ONSET_LL;
     }
 
     if (rms_persisted) {
         st->rms_above_count = 0;
-        st->refractory_until_us = t_us + st->p.refractory_us;
+        //st->refractory_until_us = t_us + st->p.refractory_us;
         return DETECT_SEIZURE_ONSET_RMS;
     }
 

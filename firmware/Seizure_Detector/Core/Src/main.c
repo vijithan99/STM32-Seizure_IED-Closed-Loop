@@ -29,7 +29,7 @@ __IO uint32_t BspButtonState = BUTTON_RELEASED;
 
 /* USER CODE BEGIN 0 */
 #define BLOCK_SIZE 1000
-#define SAMP_FREQ 5000
+#define SAMP_FREQ 10000
 #define SAMP_PERIOD_US (1000000U / SAMP_FREQ)
 #define BLOCK_PERIOD_US ((BLOCK_SIZE * 1000000U) / SAMP_FREQ)
 /* USER CODE END 0 */
@@ -71,10 +71,10 @@ int main(void)
     // Intialization detection structs
     detect_params_t detect_params = {
         .alpha = 0.01f,
-        .k_ll = 3.00f,
-		.k_rms = 2.75f,
+        .k_ll = 2.25f,
+		.k_rms = 2.25f,
         .min_std = 1.0f,
-        .persist_blocks = 5,
+        .persist_blocks = 8,
         .warmup_blocks = 80,
         .refractory_us = 500000
     };
