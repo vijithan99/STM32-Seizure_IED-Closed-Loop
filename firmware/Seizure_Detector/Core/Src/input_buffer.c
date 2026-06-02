@@ -15,12 +15,23 @@ void buffer_init(input_buffer_t *input_buf, int32_t *storage, uint16_t fs_hz, ui
 
 	input_buf->ping_ready = 0;
 	input_buf->pong_ready = 0;
+	input_buf->overrun_count = 0;
 
 	input_buf->next_start_sample = 0;
 	input_buf->uart_call = 0;
 }
 
 void buffer_sample_push(input_buffer_t *input_buf, int32_t sample){
+    // About to write into ping while ping has not been processed
+	if (input_buf->write_index == 0 && input_buf->ping_ready) {
+		input_buf->overrun_count++;
+	}
+
+    // About to write into pong while pong has not been processed
+	if (input_buf->write_index == input_buf->block_samples && input_buf->pong_ready) {
+		input_buf->overrun_count++;
+	}
+
 	input_buf->buffer[input_buf->write_index] = sample;
 	input_buf->write_index++;
 

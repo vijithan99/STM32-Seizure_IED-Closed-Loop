@@ -21,6 +21,8 @@ typedef struct {
     volatile uint8_t ping_ready;	// Volatile meaning they will
     volatile uint8_t pong_ready;
 
+    volatile uint32_t overrun_count;
+
     uint64_t next_start_sample;
     volatile uint32_t uart_call;
 } input_buffer_t;

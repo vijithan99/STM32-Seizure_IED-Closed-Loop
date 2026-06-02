@@ -48,8 +48,8 @@
 
 // Error detect GPIO, by default used to illuminate red LED
 // when an error of any kind is detected.
-#define ERROR_DETECTED_PORT 		LED_RED_GPIO_Port
-#define ERROR_DETECTED_PIN 			LED_RED_Pin
+#define ERROR_DETECTED_PORT     ErrorCode_Bit_3_GPIO_Port
+#define ERROR_DETECTED_PIN      ErrorCode_Bit_3_Pin
 // If this pin goes high (red LED illuminates), check error code
 // bits 0-3 to determine which error code has been flagged.
 // Default GPIO assignment:

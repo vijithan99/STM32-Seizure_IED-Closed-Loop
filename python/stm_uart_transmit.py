@@ -4,6 +4,7 @@ import serial
 import matplotlib.pyplot as plt
 import pyabf
 import numpy as np
+from scipy.signal import butter, sosfiltfilt, sosfilt
 
 # ----------------------------
 # Serial Port Initialization
@@ -14,30 +15,36 @@ ser.reset_input_buffer()
 ser.reset_output_buffer()
 
 # ----------------------------
+# File Cut Time
+# ----------------------------
+START_TIME_S = 0.0
+END_TIME_S = 350.0
+
+# ----------------------------
+# Filtering
+# ----------------------------
+LOWCUT = 50.0      # Hz
+HIGHCUT = 100.0   # Hz
+FILTER_ORDER = 4
+
+# ----------------------------
 # ABF path
 # ----------------------------
 current_dir = os.getcwd()
-abf_dir = os.path.join(current_dir, "seizureData")
+abf_dir = os.path.join(current_dir, "IEDData")
 
 # ----------------------------
 # Settings
 # ----------------------------
 GAIN = 1000
-BLOCK_SIZE = 1000
+BLOCK_SIZE = 500
 
+IED_DETECTED_TIMES = []
 LL_DETECTED_TIMES = []
 RMS_DETECTED_TIMES = []
 BOTH_DETECTED_TIMES = []
 
 def parse_detection_line(line: str):
-    """
-    Parse STM output lines like:
-      'LL DETECTED (ping), 250000'
-      'RMS DETECTED (pong), 500000'
-      'BOTH DETECTED (ping), 750000'
-    Returns:
-      (event_type, time_seconds) or None
-    """
     if "," not in line:
         return None
 
@@ -45,13 +52,13 @@ def parse_detection_line(line: str):
     label = parts[0].strip().upper()
 
     try:
-        time_us = int(parts[1].strip())
+        time_s = float(parts[1].strip().split()[0])
     except ValueError:
         return None
 
-    time_s = time_us / 1e6
-
-    if "BOTH DETECTED" in label:
+    if "IED DETECTED" in label:
+        return ("IED", time_s)
+    elif "BOTH DETECTED" in label:
         return ("BOTH", time_s)
     elif "LL DETECTED" in label:
         return ("LL", time_s)
@@ -59,6 +66,39 @@ def parse_detection_line(line: str):
         return ("RMS", time_s)
 
     return None
+
+# def parse_detection_line(line: str):
+#     """
+#     Parse STM output lines like:
+#       'LL DETECTED (ping), 250000'
+#       'RMS DETECTED (pong), 500000'
+#       'BOTH DETECTED (ping), 750000'
+#     Returns:
+#       (event_type, time_seconds) or None
+#     """
+#     if "," not in line:
+#         return None
+
+#     parts = line.split(",", 1)
+#     label = parts[0].strip().upper()
+
+#     try:
+#         time_us = int(parts[1].strip())
+#     except ValueError:
+#         return None
+
+#     time_s = time_us / 1e6
+
+#     if "IED DETECTED" in label:
+#         return ("IED", time_s)
+#     elif "BOTH DETECTED" in label:
+#         return ("BOTH", time_s)
+#     elif "LL DETECTED" in label:
+#         return ("LL", time_s)
+#     elif "RMS DETECTED" in label:
+#         return ("RMS", time_s)
+
+#     return None
 
 def convert_sample_to_24bit_bytes(sample_float):
     """
@@ -105,6 +145,23 @@ dataY = abf.sweepY.copy()
 dataX = abf.sweepX.copy()
 fs = abf.dataRate
 
+start_idx = int(START_TIME_S * fs)
+end_idx = int(END_TIME_S * fs)
+
+dataY = dataY[start_idx:end_idx]
+dataX = dataX[start_idx:end_idx]
+dataX = dataX - dataX[0]
+
+# Bandpass filter
+sos = butter(FILTER_ORDER, [LOWCUT, HIGHCUT], btype="bandpass", fs=fs, output="sos")
+
+# Option 1: zero-phase offline filter (good for visualization)
+filteredY = sosfiltfilt(sos, dataY)
+streamY = dataY
+
+# Option 2: causal filter (closer to real-time behavior)
+# filteredY = sosfilt(sos, dataY)
+
 print("adcNames:", getattr(abf, "adcNames", None))
 print("adcUnits:", getattr(abf, "adcUnits", None))
 print("Sampling rate:", fs)
@@ -122,14 +179,27 @@ plt.tight_layout()
 plt.show(block=False)
 
 # ----------------------------
+# Plot original vs filtered waveform
+# ----------------------------
+plt.figure(figsize=(12, 5))
+plt.plot(dataX, dataY, linewidth=0.8, label="Raw")
+plt.plot(dataX, filteredY, linewidth=0.8, label="Filtered")
+plt.title(f"{file_name} - Raw vs Filtered")
+plt.xlabel("Time (s)")
+plt.ylabel("Signal")
+plt.legend()
+plt.tight_layout()
+plt.show(block=False)
+
+# ----------------------------
 # Stream data block by block
 # ----------------------------
 block_duration = BLOCK_SIZE / fs
 
 try:
-    for start in range(0, len(dataY), BLOCK_SIZE):
-        stop = min(start + BLOCK_SIZE, len(dataY))
-        block = dataY[start:stop]
+    for start in range(0, len(streamY), BLOCK_SIZE):
+        stop = min(start + BLOCK_SIZE, len(streamY))
+        block = streamY[start:stop]
 
         payload = bytearray()
         for sample in block:
@@ -161,6 +231,8 @@ try:
                     RMS_DETECTED_TIMES.append(detect_time)
                 elif event_type == "BOTH":
                     BOTH_DETECTED_TIMES.append(detect_time)
+                elif event_type == "IED":
+                    IED_DETECTED_TIMES.append(detect_time)
 
         time.sleep(block_duration)
 
@@ -173,13 +245,15 @@ finally:
 print("LL detected times (s):", LL_DETECTED_TIMES)
 print("RMS detected times (s):", RMS_DETECTED_TIMES)
 print("BOTH detected times (s):", BOTH_DETECTED_TIMES)
+print("IED detected times (s):", IED_DETECTED_TIMES)
 
 fig, ax = plt.subplots(figsize=(14, 5))
-ax.plot(dataX, dataY, linewidth=0.8, label="Waveform")
+ax.plot(dataX, streamY, linewidth=0.8, label="Waveform")
 
 valid_ll = [t for t in LL_DETECTED_TIMES if dataX[0] <= t <= dataX[-1]]
 valid_rms = [t for t in RMS_DETECTED_TIMES if dataX[0] <= t <= dataX[-1]]
 valid_both = [t for t in BOTH_DETECTED_TIMES if dataX[0] <= t <= dataX[-1]]
+valid_ied = [t for t in IED_DETECTED_TIMES if dataX[0] <= t <= dataX[-1]]
 
 for i, t in enumerate(valid_ll):
     if i == 0:
@@ -198,11 +272,17 @@ for i, t in enumerate(valid_both):
         ax.axvline(x=t, linestyle="--", linewidth=1.2, color="red", label="Both detected")
     else:
         ax.axvline(x=t, linestyle="--", linewidth=1.2, color="red")
+        
+for i, t in enumerate(valid_ied):
+    if i == 0:
+        ax.axvline(x=t, linestyle="--", linewidth=1.2, color="orange", label="IED detected")
+    else:
+        ax.axvline(x=t, linestyle="--", linewidth=1.2, color="orange")
 
-ax.set_title(f"Waveform with STM32 detections: {file_name}")
+ax.set_title(f"Waveform with STM32 detections (no refractory overlap): {file_name}")
 ax.set_xlabel("Time (s)")
 ax.set_ylabel("Signal")
 ax.legend()
 fig.tight_layout()
-fig.savefig(f"Waveform with STM32 detections- {file_name}.png",format="png")
+fig.savefig(f"Waveform with STM32 detections (no refractory overlap) & (filtered)- {file_name}.png",format="png")
 plt.show()

@@ -122,7 +122,7 @@ void copy_next_aux_commands_to_MOSI(void);
 #ifdef USE_HAL
 extern UART_HandleTypeDef USART;
 extern SPI_HandleTypeDef SPI;
-extern TIM_HandleTypeDef INTERRUPT_TIM;
+//extern TIM_HandleTypeDef INTERRUPT_TIM;
 #else
 void begin_spi_rx(uint32_t mem_increment, uint32_t mem_address, uint32_t num_words);
 void begin_spi_tx(uint32_t mem_increment, uint32_t mem_address, uint32_t num_words);

@@ -20,7 +20,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32h7xx_it.h"
-#include "stm32h7xx_nucleo.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -56,7 +55,11 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-
+extern DMA_HandleTypeDef hdma_spi3_rx;
+extern DMA_HandleTypeDef hdma_spi3_tx;
+extern UART_HandleTypeDef hcom_uart[];
+extern SPI_HandleTypeDef hspi3;
+extern TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -200,14 +203,50 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
-  * @brief This function handles EXTI line[15:10] interrupts.
+  * @brief This function handles DMA1 stream0 global interrupt.
   */
-void USART3_IRQHandler(void)
+void DMA1_Stream0_IRQHandler(void)
 {
-    HAL_UART_IRQHandler(&hcom_uart[COM1]);
+  /* USER CODE BEGIN DMA1_Stream0_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream0_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_spi3_rx);
+  /* USER CODE BEGIN DMA1_Stream0_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream0_IRQn 1 */
 }
 
+/**
+  * @brief This function handles DMA1 stream1 global interrupt.
+  */
+void DMA1_Stream1_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream1_IRQn 0 */
 
+  /* USER CODE END DMA1_Stream1_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_spi3_tx);
+  /* USER CODE BEGIN DMA1_Stream1_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM3 global interrupt.
+  */
+void TIM3_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM3_IRQn 0 */
+
+  /* USER CODE END TIM3_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim3);
+  /* USER CODE BEGIN TIM3_IRQn 1 */
+
+  /* USER CODE END TIM3_IRQn 1 */
+}
+
+/**
+  * @brief This function handles EXTI line[15:10] interrupts.
+  */
 void EXTI15_10_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI15_10_IRQn 0 */
@@ -219,6 +258,31 @@ void EXTI15_10_IRQHandler(void)
   /* USER CODE END EXTI15_10_IRQn 1 */
 }
 
-/* USER CODE BEGIN 1 */
+/**
+  * @brief This function handles SPI3 global interrupt.
+  */
+void SPI3_IRQHandler(void)
+{
+  /* USER CODE BEGIN SPI3_IRQn 0 */
 
+  /* USER CODE END SPI3_IRQn 0 */
+  HAL_SPI_IRQHandler(&hspi3);
+  /* USER CODE BEGIN SPI3_IRQn 1 */
+
+  /* USER CODE END SPI3_IRQn 1 */
+}
+
+/* USER CODE BEGIN 1 */
+void USART3_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART3_IRQn 0 */
+
+  /* USER CODE END USART3_IRQn 0 */
+
+  HAL_UART_IRQHandler(&hcom_uart[COM1]);
+
+  /* USER CODE BEGIN USART3_IRQn 1 */
+
+  /* USER CODE END USART3_IRQn 1 */
+}
 /* USER CODE END 1 */

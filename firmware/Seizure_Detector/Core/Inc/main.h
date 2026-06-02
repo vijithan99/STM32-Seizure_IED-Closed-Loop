@@ -56,14 +56,32 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+extern SPI_HandleTypeDef hspi3;
+extern DMA_HandleTypeDef hdma_spi3_rx;
+extern DMA_HandleTypeDef hdma_spi3_tx;
+extern TIM_HandleTypeDef htim3;
 
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define Interrupt_Monitor_Pin GPIO_PIN_2
+#define Interrupt_Monitor_GPIO_Port GPIOG
+#define ErrorCode_Bit_1_Pin GPIO_PIN_5
+#define ErrorCode_Bit_1_GPIO_Port GPIOG
+#define ErrorCode_Bit_0_Pin GPIO_PIN_6
+#define ErrorCode_Bit_0_GPIO_Port GPIOG
+#define ErrorCode_Bit_2_Pin GPIO_PIN_8
+#define ErrorCode_Bit_2_GPIO_Port GPIOG
+#define Main_Monitor_Pin GPIO_PIN_8
+#define Main_Monitor_GPIO_Port GPIOC
 #define SWDIO_Pin GPIO_PIN_13
 #define SWDIO_GPIO_Port GPIOA
 #define SWCLK_Pin GPIO_PIN_14
 #define SWCLK_GPIO_Port GPIOA
+#define Compliance_Monitor_Pin GPIO_PIN_13
+#define Compliance_Monitor_GPIO_Port GPIOG
+#define ErrorCode_Bit_3_Pin GPIO_PIN_0
+#define ErrorCode_Bit_3_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */
 

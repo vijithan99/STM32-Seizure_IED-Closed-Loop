@@ -3,11 +3,7 @@
  *
  *  Created on: Mar 31, 2026
  *      Author: vijit
- */
 
-
-
-/*
   Intan Technologies RHS STM32 Firmware Framework
   Version 1.2
 

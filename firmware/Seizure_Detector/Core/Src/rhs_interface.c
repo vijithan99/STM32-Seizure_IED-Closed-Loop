@@ -29,8 +29,11 @@
 
  */
 
-#include "userfunctions.h"
+#include "user_functions.h"
+
 #include <math.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 volatile uint32_t command_sequence_MOSI[CONVERT_COMMANDS_PER_SEQUENCE + AUX_COMMANDS_PER_SEQUENCE] = {0};
 volatile uint32_t command_sequence_MISO[CONVERT_COMMANDS_PER_SEQUENCE + AUX_COMMANDS_PER_SEQUENCE] = {0};
