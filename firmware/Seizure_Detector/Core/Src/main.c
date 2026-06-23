@@ -136,16 +136,19 @@ int main(void)
 	    .fs_hz = SAMP_FREQ,
 
 	    .env_k = 5.0f,
-	    .amp_min_k = 8.0f,
-	    .amp_artifact_k = 20.0f,
+	    .amp_min_k = 10.0f,
+	    .amp_artifact_k = 30.0f,
 
 	    .baseline_alpha = 0.00002f,
 	    .min_std = 1.0f,
 
 	    .warmup_samples = SAMP_FREQ * 5,     // 1 seconds baseline at SAMP_FREQ kHz
-	    .refractory_us = 3000000,         // 3 seconds
+	    .refractory_us = 3000000,         	// 3 seconds
 
-	    .envelope_window_samples = (SAMP_FREQ * 5U) / 1000U    // Samples of envelope smoothing
+		.envelope_window_samples = (SAMP_FREQ * 5U) / 1000U,    // Samples of envelope smoothing
+
+		.candidate_window_samples = (SAMP_FREQ * 10U) / 1000U, // 10 ms
+		.raw_abs_artifact_limit = 9000.0f,                     // for GAIN=1000 and ~±10 mV clipping
 	};
 
 	ied_state_t ied_state;
@@ -282,7 +285,9 @@ int main(void)
 					 (int32_t)ied_state.last_amp_min_thresh);
 		  } else if (ied_ev == IED_REJECTED_ARTIFACT) {
 			  BSP_LED_Toggle(LED_GREEN);
-			  printf("IED REJECTED ARTIFACT (ping), %lu\r\n", (unsigned long)sample_time_us);
+			  printf("IED REJECTED ARTIFACT (ping), %lu.%06lu\r\n",
+			         (unsigned long)t_sec,
+			         (unsigned long)t_usec);
 		  }
 	  }
 	  /* Seizure Detection component
@@ -326,7 +331,9 @@ int main(void)
 						 (int32_t)ied_state.last_amp_min_thresh);
 			  } else if (ied_ev == IED_REJECTED_ARTIFACT) {
 				  BSP_LED_Toggle(LED_GREEN);
-				  printf("IED REJECTED ARTIFACT (pong), %lu\r\n", (unsigned long)sample_time_us);
+				  printf("IED REJECTED ARTIFACT (pong), %lu.%06lu\r\n",
+				         (unsigned long)t_sec,
+				         (unsigned long)t_usec);
 			  }
 		  }
 

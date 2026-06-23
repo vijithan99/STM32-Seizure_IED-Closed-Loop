@@ -14,6 +14,66 @@ static inline float fmaxf_local(float a, float b)
     return (a > b) ? a : b;
 }
 
+static float iir_bandpass_50_85hz(ied_state_t *st, float x)
+{
+    /*
+     * 4th-order Butterworth bandpass implemented as 2 SOS biquads.
+     * Designed for:
+     * fs = 5000 Hz
+     * passband = 50–85 Hz
+     *
+     * scipy:
+     * sos = scipy.signal.butter(2, [50, 85], btype='bandpass',
+     *                           fs=5000, output='sos')
+     *
+     * Each row:
+     * b0, b1, b2, a0, a1, a2
+     *
+     * a0 is 1.0, so the difference equation is:
+     * y[n] = b0*x[n] + z1
+     * z1 = b1*x[n] - a1*y[n] + z2
+     * z2 = b2*x[n] - a2*y[n]
+     */
+
+    static const float sos[2][6] = {
+        {
+            4.6895284449e-04f,
+            9.3790568899e-04f,
+            4.6895284449e-04f,
+            1.0000000000e+00f,
+           -1.9540201726e+00f,
+            9.6368791748e-01f
+        },
+        {
+            1.0000000000e+00f,
+           -2.0000000000e+00f,
+            1.0000000000e+00f,
+            1.0000000000e+00f,
+           -1.9705898680e+00f,
+            9.7510260125e-01f
+        }
+    };
+
+    float y = x;
+
+    for (int i = 0; i < 2; i++) {
+        float b0 = sos[i][0];
+        float b1 = sos[i][1];
+        float b2 = sos[i][2];
+        float a1 = sos[i][4];
+        float a2 = sos[i][5];
+
+        float out = b0 * y + st->bp_z1[i];
+
+        st->bp_z1[i] = b1 * y - a1 * out + st->bp_z2[i];
+        st->bp_z2[i] = b2 * y - a2 * out;
+
+        y = out;
+    }
+
+    return y;
+}
+
 static float iir_bandpass(ied_state_t *st, float x)
 {
     /* PLACEHOLDER coefficients
@@ -169,6 +229,57 @@ detect_ied_event_t ied_process_sample(ied_state_t *st,
 	// Candidate IED from envelope
 	uint8_t envelope_crossed = (env >= env_thresh);
 
+	// Verify the candidate is a real IED
+	if (st->candidate_active) {
+	    st->candidate_count++;
+
+	    if (amp > st->candidate_max_amp) {
+	        st->candidate_max_amp = amp;
+	    }
+
+	    if (fabsf(x) > st->candidate_max_raw) {
+	        st->candidate_max_raw = fabsf(x);
+	    }
+
+	    if (env > st->candidate_max_env) {
+	        st->candidate_max_env = env;
+	    }
+
+	    if (st->candidate_count < st->p.candidate_window_samples) {
+	        return IED_NO_EVENT;
+	    }
+
+	    /* Candidate window complete: now decide */
+	    st->candidate_active = 0;
+
+	    if (st->candidate_max_raw > st->p.raw_abs_artifact_limit) {
+	        return IED_REJECTED_ARTIFACT;
+	    }
+
+	    if (st->candidate_max_amp > amp_artifact_thresh) {
+	        return IED_REJECTED_ARTIFACT;
+	    }
+
+	    if (st->candidate_max_amp < amp_min_thresh) {
+	        return IED_REJECTED_LOW_AMPLITUDE;
+	    }
+
+	    st->refractory_until_us = st->candidate_time_us + st->p.refractory_us;
+	    return IED_DETECTED;
+	}
+
+	/* If no active candidate and envelope crosses, start candidate window */
+	if (envelope_crossed) {
+	    st->candidate_active = 1;
+	    st->candidate_count = 0;
+	    st->candidate_max_amp = amp;
+	    st->candidate_max_raw = fabsf(x);
+	    st->candidate_max_env = env;
+	    st->candidate_time_us = t_us;
+
+	    return IED_NO_EVENT;
+	}
+
 	if (!envelope_crossed) {
 		// Only update baseline when not seeing candidate activity
 		update_baseline(env, st->p.baseline_alpha, &st->env_mean, &st->env_var);
@@ -176,6 +287,7 @@ detect_ied_event_t ied_process_sample(ied_state_t *st,
 		return IED_NO_EVENT;
 	}
 
+	/* Old Single Candidate Event System
 	// Step 5: amplitude must exceed 10 SD
 	if (amp < amp_min_thresh) {
 		return IED_REJECTED_LOW_AMPLITUDE;
@@ -190,6 +302,7 @@ detect_ied_event_t ied_process_sample(ied_state_t *st,
 	st->refractory_until_us = t_us + st->p.refractory_us;
 
 	return IED_DETECTED;
+	*/
 }
 
 

@@ -34,6 +34,9 @@ typedef struct {
     uint32_t refractory_us;   // e.g. 3000000 us = 3 seconds
 
     uint32_t envelope_window_samples; // e.g. 10 ms worth of samples
+
+    uint32_t candidate_window_samples;
+    float raw_abs_artifact_limit;
 } ied_params_t;
 
 typedef struct {
@@ -64,10 +67,21 @@ typedef struct {
     float env_buf[256];   // must be >= envelope_window_samples
 
     // IIR filter states
+
     float bp_x1, bp_x2;
     float bp_y1, bp_y2;
 
     float hp_x1, hp_y1;
+
+    // Artifact Rejection + IED Detection Verification
+    uint8_t candidate_active;
+    uint32_t candidate_count;
+    uint32_t candidate_window_samples;
+
+    float candidate_max_amp;
+    float candidate_max_raw;
+    float candidate_max_env;
+    uint64_t candidate_time_us;
 
 } ied_state_t;
 
