@@ -8,6 +8,8 @@
 #ifndef INC_IED_DETECT_H_
 #define INC_IED_DETECT_H_
 
+#define BP_SOS_SECTIONS 2
+
 #include <stdint.h>
 
 typedef enum {
@@ -66,10 +68,13 @@ typedef struct {
     uint32_t env_count;
     float env_buf[256];   // must be >= envelope_window_samples
 
-    // IIR filter states
-
+    // IIR filter states (IIR bandpass function)
     float bp_x1, bp_x2;
     float bp_y1, bp_y2;
+
+    // IIR filter states (iir_bandpass_50_85hz function)
+    float bp_z1[BP_SOS_SECTIONS];
+	float bp_z2[BP_SOS_SECTIONS];
 
     float hp_x1, hp_y1;
 

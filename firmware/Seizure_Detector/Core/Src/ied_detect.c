@@ -9,13 +9,13 @@
 #include <math.h>
 #include <string.h>
 
-static inline float fmaxf_local(float a, float b)
-{
+#define BP_SOS_SECTIONS 2
+
+static inline float fmaxf_local(float a, float b){
     return (a > b) ? a : b;
 }
 
-static float iir_bandpass_50_85hz(ied_state_t *st, float x)
-{
+static float iir_bandpass_50_85hz(ied_state_t *st, float x){
     /*
      * 4th-order Butterworth bandpass implemented as 2 SOS biquads.
      * Designed for:
@@ -35,44 +35,45 @@ static float iir_bandpass_50_85hz(ied_state_t *st, float x)
      * z2 = b2*x[n] - a2*y[n]
      */
 
-    static const float sos[2][6] = {
-        {
-            4.6895284449e-04f,
-            9.3790568899e-04f,
-            4.6895284449e-04f,
-            1.0000000000e+00f,
-           -1.9540201726e+00f,
-            9.6368791748e-01f
-        },
-        {
-            1.0000000000e+00f,
-           -2.0000000000e+00f,
-            1.0000000000e+00f,
-            1.0000000000e+00f,
-           -1.9705898680e+00f,
-            9.7510260125e-01f
-        }
-    };
+	static const float sos[BP_SOS_SECTIONS][6] = {
+		{
+			4.6895284449e-04f,
+			9.3790568899e-04f,
+			4.6895284449e-04f,
+			1.0000000000e+00f,
+		   -1.9540201726e+00f,
+			9.6368791748e-01f
+		},
+		{
+			1.0000000000e+00f,
+		   -2.0000000000e+00f,
+			1.0000000000e+00f,
+			1.0000000000e+00f,
+		   -1.9705898680e+00f,
+			9.7510260125e-01f
+		}
+	};
 
-    float y = x;
+	float section_input = x;
 
-    for (int i = 0; i < 2; i++) {
-        float b0 = sos[i][0];
-        float b1 = sos[i][1];
-        float b2 = sos[i][2];
-        float a1 = sos[i][4];
-        float a2 = sos[i][5];
+	for (uint32_t i = 0; i < BP_SOS_SECTIONS; i++) {
+		const float b0 = sos[i][0];
+		const float b1 = sos[i][1];
+		const float b2 = sos[i][2];
+		const float a1 = sos[i][4];
+		const float a2 = sos[i][5];
 
-        float out = b0 * y + st->bp_z1[i];
+		const float section_output = b0 * section_input + st->bp_z1[i];
 
-        st->bp_z1[i] = b1 * y - a1 * out + st->bp_z2[i];
-        st->bp_z2[i] = b2 * y - a2 * out;
+		st->bp_z1[i] = b1 * section_input - a1 * section_output + st->bp_z2[i];
+		st->bp_z2[i] = b2 * section_input - a2 * section_output;
 
-        y = out;
-    }
+		section_input = section_output;
+	}
 
-    return y;
+	return section_input;
 }
+
 
 static float iir_bandpass(ied_state_t *st, float x)
 {
@@ -99,6 +100,8 @@ static float iir_bandpass(ied_state_t *st, float x)
 
     return y;
 }
+
+
 
 static float iir_highpass_15hz(ied_state_t *st, float x)
 {
@@ -179,7 +182,8 @@ detect_ied_event_t ied_process_sample(ied_state_t *st,
     float x = (float)raw_sample;
 
     // Bandpass Filter from 50-85 Hz
-    float bp = iir_bandpass(st, x);
+    float bp = iir_bandpass_50_85hz(st, x);
+
     //float bp = x;
 	st->last_bandpass = bp;
 
