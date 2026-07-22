@@ -57,7 +57,6 @@
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_spi3_rx;
 extern DMA_HandleTypeDef hdma_spi3_tx;
-extern UART_HandleTypeDef hcom_uart[];
 extern SPI_HandleTypeDef hspi3;
 extern TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN EV */
