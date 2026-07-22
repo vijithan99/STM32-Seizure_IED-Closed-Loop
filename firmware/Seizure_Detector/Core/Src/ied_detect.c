@@ -74,35 +74,6 @@ static float iir_bandpass_50_85hz(ied_state_t *st, float x){
 	return section_input;
 }
 
-
-static float iir_bandpass(ied_state_t *st, float x)
-{
-    /* PLACEHOLDER coefficients
-	 * Below coefficients are calculated using Python's SciPy for a pass band of 50-100 Hz
-	 *
-	 * The power calculation will be taken from this component rectified
-	 */
-
-    const float b0 = 1.0f;
-    const float b1 = -2.0f;
-    const float b2 = 1.0f;
-    const float a1 = -1.983f;
-    const float a2 = 0.987f;
-
-    float y = b0 * x + b1 * st->bp_x1 + b2 * st->bp_x2
-              - a1 * st->bp_y1 - a2 * st->bp_y2;
-
-    st->bp_x2 = st->bp_x1;
-    st->bp_x1 = x;
-
-    st->bp_y2 = st->bp_y1;
-    st->bp_y1 = y;
-
-    return y;
-}
-
-
-
 static float iir_highpass_15hz(ied_state_t *st, float x)
 {
     /*
