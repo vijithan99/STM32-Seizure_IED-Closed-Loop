@@ -26,8 +26,10 @@
 #include "input_buffer.h"
 #include "uart_recieve.h"
 #include "user_functions.h"
+
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <inttypes.h>
 
 /* USER CODE END Includes */
@@ -118,7 +120,7 @@ static bool rhs_spi_rom_test(void){
 
 	uint32_t spi_rx[7] = {0};
 
-	HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(&hspi3, (uint8_t *)spi_tx, (uint8_t *)spi_rx, 7U, 100U);
+	HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(&hspi3, (const uint8_t *)spi_tx, (uint8_t *)spi_rx, 7U, 100U);
 
 	 if (status != HAL_OK){
 		printf("SPI transfer failed: status=%d error=0x%08lX\r\n",
@@ -277,13 +279,41 @@ int main(void)
   ied_init(&ied_state, &ied_params);
   uart_rx_start();
 
-  /* -- Sample board code to send message over COM1 port ---- */
-  printf("Welcome to STM32 world !\n\r");
+  printf("\r\nStarting RHS2116 SPI ROM test...\r\n");
 
-  /* -- Sample board code to switch on leds ---- */
-  BSP_LED_On(LED_GREEN);
-  BSP_LED_On(LED_YELLOW);
-  BSP_LED_On(LED_RED);
+  /*
+   * Give the headstage and interface electronics time to settle
+   * before issuing the first command.
+   */
+  HAL_Delay(100U);
+
+  bool rhs_detected = false;
+
+  for (uint32_t attempt = 1U; attempt <= 3U; attempt++){
+      printf("ROM test attempt %" PRIu32 "...\r\n", attempt);
+
+      rhs_detected = rhs_spi_rom_test();
+
+      if (rhs_detected){
+          break;
+      }
+
+      HAL_Delay(100U);
+  }
+
+  bool rhs_detected = rhs_spi_rom_test();
+
+  BSP_LED_Off(LED_GREEN);
+  BSP_LED_Off(LED_YELLOW);
+  BSP_LED_Off(LED_RED);
+
+  if (rhs_detected){
+      BSP_LED_On(LED_GREEN);
+  }
+
+  else{
+      BSP_LED_On(LED_RED);
+  }
 
   /* USER CODE END BSP */
 
@@ -498,7 +528,7 @@ static void MX_SPI3_Init(void)
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_HARD_OUTPUT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
