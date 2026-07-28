@@ -103,6 +103,68 @@ static void handle_detect_event(detect_event_t ev, const char *block_name, uint6
 	}
 }
 
+static bool rhs_spi_rom_test(void){
+	uint32_t spi_tx[7] = {
+		read_command(255, false, false),
+		read_command(254, false, false),
+		read_command(253, false, false),
+		read_command(252, false, false),
+		read_command(251, false, false),
+
+		/* Two extra commands flush the two-command pipeline. */
+		read_command(255, false, false),
+		read_command(255, false, false)
+	};
+
+	uint32_t spi_rx[7] = {0};
+
+	HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(&hspi3, (uint8_t *)spi_tx, (uint8_t *)spi_rx, 7U, 100U);
+
+	 if (status != HAL_OK){
+		printf("SPI transfer failed: status=%d error=0x%08lX\r\n",
+			   (int)status,
+			   (unsigned long)HAL_SPI_GetError(&hspi3));
+
+		return false;
+	}
+
+	 /*
+	  * The RHS2116 returns each command result two SPI cycles later.
+	  *
+	  * spi_rx[0] and spi_rx[1] contain previous/undefined pipeline results.
+	  * spi_rx[2] is the result of spi_tx[0].
+	  * spi_rx[3] is the result of spi_tx[1].
+	  * ...
+	  * spi_rx[6] is the result of spi_tx[4].
+	  *
+	  * spi_tx[5] and spi_tx[6] provide the extra clock cycles needed
+	  * to receive the final two requested register values.
+	  */
+	uint16_t chip_id     = (uint16_t)(spi_rx[2] & 0xFFFFU);
+	uint16_t revision_ch = (uint16_t)(spi_rx[3] & 0xFFFFU);
+	uint16_t intan_nul   = (uint16_t)(spi_rx[4] & 0xFFFFU);
+	uint16_t intan_ta    = (uint16_t)(spi_rx[5] & 0xFFFFU);
+	uint16_t intan_in    = (uint16_t)(spi_rx[6] & 0xFFFFU);
+
+	printf("\r\nRHS2116 ROM test\r\n");
+	printf("Register 255: 0x%04X\r\n", chip_id);
+	printf("Register 254: 0x%04X\r\n", revision_ch);
+	printf("Register 253: 0x%04X\r\n", intan_nul);
+	printf("Register 252: 0x%04X\r\n", intan_ta);
+	printf("Register 251: 0x%04X\r\n", intan_in);
+
+	bool passed =
+		chip_id == 0x0020U &&
+		(revision_ch & 0x00FFU) == 0x0010U &&
+		intan_nul == 0x4E00U &&
+		intan_ta  == 0x5441U &&
+		intan_in  == 0x494EU;
+
+	printf("ROM test: %s\r\n", passed ? "PASS" : "FAIL");
+
+	return passed;
+}
+
 /* USER CODE END 0 */
 
 /**
