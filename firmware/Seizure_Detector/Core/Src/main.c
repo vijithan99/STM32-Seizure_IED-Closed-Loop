@@ -128,7 +128,19 @@ static bool rhs_spi_rom_test(void){
 			   (unsigned long)HAL_SPI_GetError(&hspi3));
 
 		return false;
-	}
+	 }
+
+	 printf("\r\nRaw SPI transaction:\r\n");
+
+	 for (uint32_t i = 0U; i < 7U; i++) {
+	     printf(
+	         "[%" PRIu32 "] TX=0x%08" PRIX32
+	         " RX=0x%08" PRIX32 "\r\n",
+	         i,
+	         spi_tx[i],
+	         spi_rx[i]
+	     );
+	 }
 
 	 /*
 	  * The RHS2116 returns each command result two SPI cycles later.
@@ -300,8 +312,6 @@ int main(void)
 
       HAL_Delay(100U);
   }
-
-  bool rhs_detected = rhs_spi_rom_test();
 
   BSP_LED_Off(LED_GREEN);
   BSP_LED_Off(LED_YELLOW);
@@ -528,7 +538,7 @@ static void MX_SPI3_Init(void)
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_HARD_OUTPUT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
