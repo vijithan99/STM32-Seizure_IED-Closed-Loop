@@ -26,6 +26,7 @@ firmware/**/*.launch
 
 __pycache__/
 *.pyc
+*.txt
 .ipynb_checkpoints/
 
 # ========================
@@ -40,5 +41,6 @@ Thumbs.db
 # ========================
 # Figures
 # ========================
+
 *.png
 /Figures
