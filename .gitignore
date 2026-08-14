@@ -36,3 +36,9 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# ========================
+# Figures
+# ========================
+*.png
+/Figures

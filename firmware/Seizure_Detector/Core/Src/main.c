@@ -105,6 +105,63 @@ static void handle_detect_event(detect_event_t ev, const char *block_name, uint6
 	}
 }
 
+static bool rhs_lvds_loopback_test(void){
+    uint32_t tx[] = {
+        0xA5C33C5AU,
+        0xC0FF0000U,
+        0x12345678U,
+        0x00000000U,
+        0xFFFFFFFFU
+    };
+
+    uint32_t rx[sizeof(tx) / sizeof(tx[0])] = {0};
+
+    const uint16_t word_count =
+        (uint16_t)(sizeof(tx) / sizeof(tx[0]));
+
+    HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(
+        &hspi3,
+        (const uint8_t *)tx,
+        (uint8_t *)rx,
+        word_count,
+        100U
+    );
+
+    if (status != HAL_OK) {
+        printf(
+            "LVDS loopback failed: status=%d error=0x%08lX\r\n",
+            (int)status,
+            (unsigned long)HAL_SPI_GetError(&hspi3)
+        );
+        return false;
+    }
+
+    bool passed = true;
+
+    printf("\r\nLVDS round-trip loopback\r\n");
+
+    for (uint32_t i = 0U; i < word_count; i++) {
+        printf(
+            "[%lu] TX=0x%08lX RX=0x%08lX %s\r\n",
+            (unsigned long)i,
+            (unsigned long)tx[i],
+            (unsigned long)rx[i],
+            tx[i] == rx[i] ? "PASS" : "FAIL"
+        );
+
+        if (tx[i] != rx[i]) {
+            passed = false;
+        }
+    }
+
+    printf(
+        "LVDS round-trip loopback: %s\r\n",
+        passed ? "PASS" : "FAIL"
+    );
+
+    return passed;
+}
+
 static bool rhs_spi_rom_test(void){
 	uint32_t spi_tx[7] = {
 		read_command(255, false, false),
@@ -117,6 +174,10 @@ static bool rhs_spi_rom_test(void){
 		read_command(255, false, false),
 		read_command(255, false, false)
 	};
+
+//	for (uint32_t i = 0; i < 7; i++) {
+//		spi_tx[i] = 0xC0FF0000U;
+//	}
 
 	uint32_t spi_rx[7] = {0};
 
@@ -301,13 +362,13 @@ int main(void)
 
   bool rhs_detected = false;
 
-  for (uint32_t attempt = 1U; attempt <= 3U; attempt++){
+  for (uint32_t attempt = 1U; attempt <= 50U; attempt++){
       printf("ROM test attempt %" PRIu32 "...\r\n", attempt);
 
       rhs_detected = rhs_spi_rom_test();
 
       if (rhs_detected){
-          break;
+          printf("PASSED!!");
       }
 
       HAL_Delay(100U);
@@ -331,7 +392,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
     /* -- Sample board code for User push-button in interrupt mode ---- */
 	  if (BspButtonState == BUTTON_PRESSED){
 	    /* Update button state */
@@ -538,7 +598,7 @@ static void MX_SPI3_Init(void)
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_HARD_OUTPUT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -551,7 +611,7 @@ static void MX_SPI3_Init(void)
   hspi3.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
   hspi3.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_06CYCLE;
   hspi3.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
-  hspi3.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
+  hspi3.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_ENABLE;
   hspi3.Init.IOSwap = SPI_IO_SWAP_DISABLE;
   if (HAL_SPI_Init(&hspi3) != HAL_OK)
   {
