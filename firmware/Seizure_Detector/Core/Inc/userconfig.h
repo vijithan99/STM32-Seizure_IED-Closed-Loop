@@ -44,7 +44,7 @@
 // If acquiring a short period of data, then exiting and transmitting data
 // offline is desired, leave this uncommented.
 // If instead transmitting data in real-time is desired, leave this commented.
-#define OFFLINE_TRANSFER
+//#define OFFLINE_TRANSFER
 
 // Error detect GPIO, by default used to illuminate red LED
 // when an error of any kind is detected.
@@ -90,7 +90,7 @@
 // list finishes and repeats execution from the beginning again.
 #define AUX_COMMAND_LIST_LENGTH 128
 
-#define AUTO_STIM_CMD_MODE
+//#define AUTO_STIM_CMD_MODE
 
 #define NUM_STIM_SEQUENCES 2
 
@@ -106,7 +106,7 @@
 // corresponds to 20000 samples per channel.
 // Note that on-chip RAM is limited, so setting this number excessively high will cause
 // the chip to run out of memory during program execution.
-#define NUMBER_OF_SECONDS_TO_ACQUIRE 0.5
+#define NUMBER_OF_SECONDS_TO_ACQUIRE 1
 
 // Which of the RHS chip's amplifier channels is selected as the starting point to have its data
 // saved and transmitted via USART.
@@ -119,7 +119,7 @@
 // If the user wishes to use a different peripheral, for example SPI2 instead of SPI3, then that
 // change should be made here (in addition to configuring that peripheral properly in the .ioc file).
 #ifdef USE_HAL
-#define USART huart3
+#define USART hcom_uart[COM1]
 #define SPI hspi3
 #define INTERRUPT_TIM htim3
 #else

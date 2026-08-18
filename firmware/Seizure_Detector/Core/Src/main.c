@@ -310,6 +310,16 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
+  // Wait for 500 ms after program starts.
+  // This is due to a STM32CubeIDE-related bug that runs previously loaded software briefly on the target device
+  // before running the new software when downloading and running new code. This doesn't happen when triggering a hardware
+  // reset, for example pushing the RESET button on a NUCLEO board, or when downloading/running using
+  // STM32CubeProgrammer. For these cases, this delay can be removed.
+  // When this bug does occur, we recommend including a delay of ~500 ms so that this brief running of the previously
+  // loaded program doesn't have any interaction with any peripherals and this re-run program does nothing important.
+  // In practice, 50 ms is likely enough of a pause from our testing, but 500 ms is even safer.
+  wait_ms(500);
+
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
@@ -319,7 +329,43 @@ int main(void)
   MX_DMA_Init();
   MX_SPI3_Init();
   MX_TIM3_Init();
-  /* USER CODE BEGIN 2 */
+
+  /* Stop here so the normal acquisition code does not start. */
+//  while (1) {
+//      HAL_Delay(1000U);
+//  }
+
+  // Write register value to pause all used timers when execution pauses during debug
+  SET_BIT(DBGMCU->APB1LFZ1, 0b10); // enable pausing TIM3 during debug
+
+  // Allocate sample_memory array which will be used to store acquired data.
+  allocate_sample_memory();
+
+  // Set up SPI DMA configuration for when SPI transfers begin.
+  initialize_spi_with_dma();
+
+  initialize_stim_sequences();
+  initialize_command_buffer();
+
+  // Initialize Intan chip registers with suitable settings for this application.
+  // This not only determines the initial registers, but actually writes them via SPI.
+  configure_registers();
+
+
+  // Populate first CONVERT_COMMANDS_PER_SEQUENCE that will repeatedly
+  // convert for each sample interrupt.
+  // Note that this doesn't touch the aux commands in command_sequence_MOSI.
+  configure_convert_commands();
+
+#ifdef AUTO_STIM_CMD_MODE
+  configure_stim_sequences();
+  process_stim_sequences();
+#else
+  configure_aux_commands();
+#endif
+
+  copy_next_aux_commands_to_MOSI();
+
 
   /* USER CODE END 2 */
 
@@ -352,26 +398,26 @@ int main(void)
   ied_init(&ied_state, &ied_params);
   uart_rx_start();
 
-  printf("\r\nStarting RHS2116 SPI ROM test...\r\n");
+  /* USER CODE BEGIN 2 */
+//  printf("\r\nStarting RHS2116 SPI ROM test...\r\n");
 
-  /*
-   * Give the headstage and interface electronics time to settle
-   * before issuing the first command.
-   */
+    /*
+     * Give the headstage and interface electronics time to settle
+     * before issuing the first command.
+     */
   HAL_Delay(100U);
 
   bool rhs_detected = false;
 
   for (uint32_t attempt = 1U; attempt <= 50U; attempt++){
-      printf("ROM test attempt %" PRIu32 "...\r\n", attempt);
+//	  printf("ROM test attempt %" PRIu32 "...\r\n", attempt);
 
-      rhs_detected = rhs_spi_rom_test();
+//	  rhs_detected = rhs_spi_rom_test();
 
-      if (rhs_detected){
-          printf("PASSED!!");
-      }
+	  if (rhs_detected){
+//		  printf("PASSED!!");
+	  }
 
-      HAL_Delay(100U);
   }
 
   BSP_LED_Off(LED_GREEN);
@@ -379,136 +425,134 @@ int main(void)
   BSP_LED_Off(LED_RED);
 
   if (rhs_detected){
-      BSP_LED_On(LED_GREEN);
+	  BSP_LED_On(LED_GREEN);
   }
 
   else{
-      BSP_LED_On(LED_RED);
+	  BSP_LED_On(LED_RED);
   }
+
+  // Turn on LED to indicate acquisition is about to start.
+  BSP_LED_On(LED_GREEN);
+
+  // Start timer so that at every period defined by INTERRUPT_TIM, an interrupt occurs, starting an SPI command sequence.
+  sample_counter = 0;
+  sample_interrupt_occurred = false;
+  enable_interrupt_timer(true);
+  main_loop_active = true;
+  main_pin_status = false;
 
   /* USER CODE END BSP */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* -- Sample board code for User push-button in interrupt mode ---- */
-	  if (BspButtonState == BUTTON_PRESSED){
-	    /* Update button state */
-	    BspButtonState = BUTTON_RELEASED;
-	    /* -- Sample board code to toggle leds ---- */
-	    BSP_LED_Toggle(LED_GREEN);
-	    BSP_LED_Toggle(LED_YELLOW);
-	    BSP_LED_Toggle(LED_RED);
-	    printf("LEDS ON!\r\n");
-		printf("write_index = %lu\r\n", input_buf.write_index);
-		printf("ping_ready = %u\r\n", input_buf.ping_ready);
-		printf("pong_ready = %u\r\n", input_buf.pong_ready);
-		printf("block_samples = %lu\r\n", input_buf.block_samples);
-		printf("fs_hz = %u\r\n", input_buf.fs_hz);
-		printf("uart_call = %lu\r\n", input_buf.uart_call);
-		printf("overrun_count = %lu\r\n", input_buf.overrun_count);
+  while (1){
+	  // Break infinite loop when loop_escape() condition has been met.
+	  if (loop_escape()) break;
 
-		printf("buffer[0] = %ld\r\n", input_buf.buffer[0]);
-		printf("buffer[1] = %ld\r\n", input_buf.buffer[1]);
-		printf("buffer[2] = %ld\r\n", input_buf.buffer[2]);
-		printf("buffer[3] = %ld\r\n", input_buf.buffer[3]);
-	}
-
-
-	if (input_buf.ping_ready){
-	  input_buf.ping_ready = 0;
-	  ping_ptr = buffer_get_ping_ptr(&input_buf);
-
-	  // Sample-by-sample IED detection inside this block
-	  for (uint32_t i = 0; i < BLOCK_SIZE; i++) {
-		  uint64_t sample_time_us = block_time_us + ((uint64_t)i * SAMP_PERIOD_US);
-		  uint32_t t_sec = (uint32_t)(sample_time_us / 1000000ULL);
-		  uint32_t t_usec = (uint32_t)(sample_time_us % 1000000ULL);
-
-		  detect_ied_event_t ied_ev = ied_process_sample(&ied_state,
-												  ping_ptr[i],
-												  sample_time_us);
-
-		  if (ied_ev == IED_DETECTED) {
-			  BSP_LED_Toggle(LED_RED);
-			  //printf("IED DETECTED (ping), %lu\r\n", (unsigned long)sample_time_us);
-			  printf("IED DETECTED (ping), %lu.%06lu\r\n",
-			         (unsigned long)t_sec,
-			         (unsigned long)t_usec);
-		  } else if (ied_ev == IED_REJECTED_LOW_AMPLITUDE) {
-			  BSP_LED_Toggle(LED_YELLOW);
-			  printf("IED REJECTED LOW AMP (ping), %lu env=%ld thresh=%ld amp=%ld amin=%ld\r\n",
-					  (unsigned long)sample_time_us,
-					 (int32_t)ied_state.last_envelope,
-					 (int32_t)ied_state.last_env_thresh,
-					 (int32_t)ied_state.last_amp_hp,
-					 (int32_t)ied_state.last_amp_min_thresh);
-		  } else if (ied_ev == IED_REJECTED_ARTIFACT) {
-			  BSP_LED_Toggle(LED_GREEN);
-			  printf("IED REJECTED ARTIFACT (ping), %lu.%06lu\r\n",
-			         (unsigned long)t_sec,
-			         (unsigned long)t_usec);
-		  }
-	  }
-	  /* Seizure Detection component
-	   *
-	   * ev = detect_process_block(&detect_state, ping_ptr, BLOCK_SIZE, block_time_us);
-	   *
-	   * handle_detect_event(ev, "ping", block_time_us);
-	   */
-
-		// process ping block here
-		block_time_us += BLOCK_PERIOD_US;
-
+	  // During infinite loop, monitor if GPIO pin needs writing from low to high
+	  if (main_loop_active && !main_pin_status) {
+		  write_pin(Main_Monitor_GPIO_Port, Main_Monitor_Pin, true);
+		  main_pin_status = true;
 	  }
 
-	  if (input_buf.pong_ready){
-		  input_buf.pong_ready = 0;
-		  pong_ptr = buffer_get_pong_ptr(&input_buf);
-		  // Sample-by-sample IED detection inside this block
-		  for (uint32_t i = 0; i < BLOCK_SIZE; i++) {
-			  uint64_t sample_time_us = block_time_us + ((uint64_t)i * SAMP_PERIOD_US);
-			  uint32_t t_sec = (uint32_t)(sample_time_us / 1000000ULL);
-			  uint32_t t_usec = (uint32_t)(sample_time_us % 1000000ULL);
-
-
-			  detect_ied_event_t ied_ev = ied_process_sample(&ied_state,
-													  pong_ptr[i],
-													  sample_time_us);
-
-			  if (ied_ev == IED_DETECTED) {
-				  BSP_LED_Toggle(LED_RED);
-				  printf("IED DETECTED (pong), %lu.%06lu\r\n",
-				         (unsigned long)t_sec,
-				         (unsigned long)t_usec);
-			  } else if (ied_ev == IED_REJECTED_LOW_AMPLITUDE) {
-				  BSP_LED_Toggle(LED_YELLOW);
-				  printf("IED REJECTED LOW AMP (pong), %lu env=%ld thresh=%ld amp=%ld amin=%ld\r\n",
-						  (unsigned long)sample_time_us,
-						 (int32_t)ied_state.last_envelope,
-						 (int32_t)ied_state.last_env_thresh,
-						 (int32_t)ied_state.last_amp_hp,
-						 (int32_t)ied_state.last_amp_min_thresh);
-			  } else if (ied_ev == IED_REJECTED_ARTIFACT) {
-				  BSP_LED_Toggle(LED_GREEN);
-				  printf("IED REJECTED ARTIFACT (pong), %lu.%06lu\r\n",
-				         (unsigned long)t_sec,
-				         (unsigned long)t_usec);
-			  }
-		  }
-
-		  // Existing block-based seizure detection
-		  /* Seizure Detection component
-		   *  ev = detect_process_block(&detect_state, pong_ptr, BLOCK_SIZE, block_time_us);
-		   *
-		   * handle_detect_event(ev, "pong", block_time_us);
-		   *
-		   */
-
-		  block_time_us += BLOCK_PERIOD_US;
-
+	  if (sample_interrupt_occurred) {
+		  sample_processing_routine();
 	  }
+
+//	  if (input_buf.ping_ready){
+//		  input_buf.ping_ready = 0;
+//		  ping_ptr = buffer_get_ping_ptr(&input_buf);
+//
+//		  // Sample-by-sample IED detection inside this block
+//		  for (uint32_t i = 0; i < BLOCK_SIZE; i++) {
+//			  uint64_t sample_time_us = block_time_us + ((uint64_t)i * SAMP_PERIOD_US);
+//			  uint32_t t_sec = (uint32_t)(sample_time_us / 1000000ULL);
+//			  uint32_t t_usec = (uint32_t)(sample_time_us % 1000000ULL);
+//
+//			  detect_ied_event_t ied_ev = ied_process_sample(&ied_state,
+//													  ping_ptr[i],
+//													  sample_time_us);
+//
+//			  if (ied_ev == IED_DETECTED) {
+//				  BSP_LED_Toggle(LED_RED);
+//				  //printf("IED DETECTED (ping), %lu\r\n", (unsigned long)sample_time_us);
+//				  printf("IED DETECTED (ping), %lu.%06lu\r\n",
+//						 (unsigned long)t_sec,
+//						 (unsigned long)t_usec);
+//			  } else if (ied_ev == IED_REJECTED_LOW_AMPLITUDE) {
+//				  BSP_LED_Toggle(LED_YELLOW);
+//				  printf("IED REJECTED LOW AMP (ping), %lu env=%ld thresh=%ld amp=%ld amin=%ld\r\n",
+//						  (unsigned long)sample_time_us,
+//						 (int32_t)ied_state.last_envelope,
+//						 (int32_t)ied_state.last_env_thresh,
+//						 (int32_t)ied_state.last_amp_hp,
+//						 (int32_t)ied_state.last_amp_min_thresh);
+//			  } else if (ied_ev == IED_REJECTED_ARTIFACT) {
+//				  BSP_LED_Toggle(LED_GREEN);
+//				  printf("IED REJECTED ARTIFACT (ping), %lu.%06lu\r\n",
+//						 (unsigned long)t_sec,
+//						 (unsigned long)t_usec);
+//			  }
+//		  }
+//	  /* Seizure Detection component
+//	   *
+//	   * ev = detect_process_block(&detect_state, ping_ptr, BLOCK_SIZE, block_time_us);
+//	   *
+//	   * handle_detect_event(ev, "ping", block_time_us);
+//	   */
+//
+//		// process ping block here
+//		block_time_us += BLOCK_PERIOD_US;
+//
+//	  }
+//
+//	  if (input_buf.pong_ready){
+//		  input_buf.pong_ready = 0;
+//		  pong_ptr = buffer_get_pong_ptr(&input_buf);
+//		  // Sample-by-sample IED detection inside this block
+//		  for (uint32_t i = 0; i < BLOCK_SIZE; i++) {
+//			  uint64_t sample_time_us = block_time_us + ((uint64_t)i * SAMP_PERIOD_US);
+//			  uint32_t t_sec = (uint32_t)(sample_time_us / 1000000ULL);
+//			  uint32_t t_usec = (uint32_t)(sample_time_us % 1000000ULL);
+//
+//
+//			  detect_ied_event_t ied_ev = ied_process_sample(&ied_state,
+//													  pong_ptr[i],
+//													  sample_time_us);
+//
+//			  if (ied_ev == IED_DETECTED) {
+//				  BSP_LED_Toggle(LED_RED);
+//				  printf("IED DETECTED (pong), %lu.%06lu\r\n",
+//				         (unsigned long)t_sec,
+//				         (unsigned long)t_usec);
+//			  } else if (ied_ev == IED_REJECTED_LOW_AMPLITUDE) {
+//				  BSP_LED_Toggle(LED_YELLOW);
+//				  printf("IED REJECTED LOW AMP (pong), %lu env=%ld thresh=%ld amp=%ld amin=%ld\r\n",
+//						  (unsigned long)sample_time_us,
+//						 (int32_t)ied_state.last_envelope,
+//						 (int32_t)ied_state.last_env_thresh,
+//						 (int32_t)ied_state.last_amp_hp,
+//						 (int32_t)ied_state.last_amp_min_thresh);
+//			  } else if (ied_ev == IED_REJECTED_ARTIFACT) {
+//				  BSP_LED_Toggle(LED_GREEN);
+//				  printf("IED REJECTED ARTIFACT (pong), %lu.%06lu\r\n",
+//				         (unsigned long)t_sec,
+//				         (unsigned long)t_usec);
+//			  }
+//		  }
+//
+//		  // Existing block-based seizure detection
+//		  /* Seizure Detection component
+//		   *  ev = detect_process_block(&detect_state, pong_ptr, BLOCK_SIZE, block_time_us);
+//		   *
+//		   * handle_detect_event(ev, "pong", block_time_us);
+//		   *
+//		   */
+//
+//		  block_time_us += BLOCK_PERIOD_US;
+//
+//	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
