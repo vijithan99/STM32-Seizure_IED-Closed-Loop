@@ -189,7 +189,7 @@ static void spi_txrx_cplt_callback(void)
 		transmit_data_realtime();
 
 		// Look for and process results of any compliance-monitor READ commands.
-		process_compliance_data();
+//		process_compliance_data();
 
 		// Copy the MOSI commands currently in next_aux_commands into actual MOSI memory accessible via DMA.
 		copy_next_aux_commands_to_MOSI();

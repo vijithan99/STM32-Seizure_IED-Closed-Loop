@@ -175,9 +175,6 @@ static bool rhs_spi_rom_test(void){
 		read_command(255, false, false)
 	};
 
-//	for (uint32_t i = 0; i < 7; i++) {
-//		spi_tx[i] = 0xC0FF0000U;
-//	}
 
 	uint32_t spi_rx[7] = {0};
 
@@ -351,7 +348,6 @@ int main(void)
   // This not only determines the initial registers, but actually writes them via SPI.
   configure_registers();
 
-
   // Populate first CONVERT_COMMANDS_PER_SEQUENCE that will repeatedly
   // convert for each sample interrupt.
   // Note that this doesn't touch the aux commands in command_sequence_MOSI.
@@ -399,30 +395,30 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
 //  printf("\r\nStarting RHS2116 SPI ROM test...\r\n");
-
-    /*
-     * Give the headstage and interface electronics time to settle
-     * before issuing the first command.
-     */
-  HAL_Delay(100U);
-
-  bool rhs_detected = false;
-
+//
+//    /*
+//     * Give the headstage and interface electronics time to settle
+//     * before issuing the first command.
+//     */
+//  HAL_Delay(100U);
+//
+//  bool rhs_detected = false;
+//
 //  for (uint32_t attempt = 1U; attempt <= 50U; attempt++){
 //	  printf("ROM test attempt %" PRIu32 "...\r\n", attempt);
-
+//
 //	  rhs_detected = rhs_spi_rom_test();
-
+//
 //	  if (rhs_detected){
 //		  printf("PASSED!!");
 //	  }
 //
 //  }
-
-  BSP_LED_Off(LED_GREEN);
-  BSP_LED_Off(LED_YELLOW);
-  BSP_LED_Off(LED_RED);
-
+//
+//  BSP_LED_Off(LED_GREEN);
+//  BSP_LED_Off(LED_YELLOW);
+//  BSP_LED_Off(LED_RED);
+//
 //  if (rhs_detected){
 //	  BSP_LED_On(LED_GREEN);
 //  }
@@ -430,9 +426,9 @@ int main(void)
 //  else{
 //	  BSP_LED_On(LED_RED);
 //  }
-
-  // Turn on LED to indicate acquisition is about to start.
-  BSP_LED_On(LED_GREEN);
+//
+//  // Turn on LED to indicate acquisition is about to start.
+//  BSP_LED_On(LED_GREEN);
 
   // Start timer so that at every period defined by INTERRUPT_TIM, an interrupt occurs, starting an SPI command sequence.
   sample_counter = 0;
