@@ -366,7 +366,6 @@ int main(void)
 
   copy_next_aux_commands_to_MOSI();
 
-
   /* USER CODE END 2 */
 
   /* Initialize leds */
@@ -390,13 +389,13 @@ int main(void)
 
   /* USER CODE BEGIN BSP */
   /* Initialize buffer and UART RX module */
-  buffer_init(&input_buf, buffer_storage, SAMP_FREQ, BLOCK_SIZE);
-  HAL_NVIC_SetPriority(USART3_IRQn, 0, 0);
+//  buffer_init(&input_buf, buffer_storage, SAMP_FREQ, BLOCK_SIZE);
+  HAL_NVIC_SetPriority(USART3_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(USART3_IRQn);
-  uart_rx_init(&input_buf);
-  detect_init(&detect_state, &detect_params);
-  ied_init(&ied_state, &ied_params);
-  uart_rx_start();
+//  uart_rx_init(&input_buf);
+//  detect_init(&detect_state, &detect_params);
+//  ied_init(&ied_state, &ied_params);
+//  uart_rx_start();
 
   /* USER CODE BEGIN 2 */
 //  printf("\r\nStarting RHS2116 SPI ROM test...\r\n");
@@ -409,28 +408,28 @@ int main(void)
 
   bool rhs_detected = false;
 
-  for (uint32_t attempt = 1U; attempt <= 50U; attempt++){
+//  for (uint32_t attempt = 1U; attempt <= 50U; attempt++){
 //	  printf("ROM test attempt %" PRIu32 "...\r\n", attempt);
 
 //	  rhs_detected = rhs_spi_rom_test();
 
-	  if (rhs_detected){
+//	  if (rhs_detected){
 //		  printf("PASSED!!");
-	  }
-
-  }
+//	  }
+//
+//  }
 
   BSP_LED_Off(LED_GREEN);
   BSP_LED_Off(LED_YELLOW);
   BSP_LED_Off(LED_RED);
 
-  if (rhs_detected){
-	  BSP_LED_On(LED_GREEN);
-  }
-
-  else{
-	  BSP_LED_On(LED_RED);
-  }
+//  if (rhs_detected){
+//	  BSP_LED_On(LED_GREEN);
+//  }
+//
+//  else{
+//	  BSP_LED_On(LED_RED);
+//  }
 
   // Turn on LED to indicate acquisition is about to start.
   BSP_LED_On(LED_GREEN);

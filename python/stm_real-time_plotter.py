@@ -10,12 +10,17 @@ import struct
 import serial
 from serial.tools import list_ports
 
+import time
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore
 
 PORT = "COM4"
 BAUD = 921600
+
+packet_count = 0
+last_sequence = None
+report_time = time.monotonic()
 
 # 5000-Hz acquisition divided by UART_STREAM_DECIMATION=5.
 STREAM_FS = 1000
@@ -24,6 +29,15 @@ DISPLAY_SECONDS = 3
 SYNC_VALUE = 0xA55A
 SYNC_BYTES = b"\x5A\xA5"       # STM32 little-endian representation
 FRAME = struct.Struct("<HHhh")  # sync, sequence, chA, chB
+
+serial_port = serial.Serial("COM4", 921600, timeout=1)
+time.sleep(10)
+
+data = serial_port.read(100)
+print("Bytes received:", len(data))
+print("Raw data:", data.hex(" "))
+
+serial_port.close()
 
 serial_port = serial.Serial(PORT, BAUD, timeout=0)
 
@@ -74,6 +88,8 @@ def append_samples(destination, new_values):
 
 
 def update_plot():
+    global packet_count, last_sequence, report_time
+
     available = serial_port.in_waiting
 
     if available:
@@ -97,6 +113,9 @@ def update_plot():
             break
 
         sync, sequence, ac_a, ac_b = FRAME.unpack_from(receive_buffer)
+        
+        packet_count += 1
+        last_sequence = sequence
 
         if sync != SYNC_VALUE:
             del receive_buffer[0]
@@ -114,6 +133,17 @@ def update_plot():
 
         curve_a.setData(time_axis, channel_a)
         curve_b.setData(time_axis, channel_b)
+    
+    now = time.monotonic()
+
+    if now - report_time >= 1.0:
+        print(
+            f"Packets/s: {packet_count}, "
+            f"last sequence: {last_sequence}, "
+            f"buffered bytes: {len(receive_buffer)}"
+        )
+        packet_count = 0
+        report_time = now
 
 show_serial_ports()
 

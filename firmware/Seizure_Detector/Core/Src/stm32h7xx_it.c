@@ -22,6 +22,9 @@
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "rhs_interface.h"
+#include "user_functions.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,6 +44,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
+volatile uint64_t SysTick_counter = 0;
 
 /* USER CODE END PV */
 
@@ -285,3 +289,26 @@ void USART3_IRQHandler(void)
   /* USER CODE END USART3_IRQn 1 */
 }
 /* USER CODE END 1 */
+
+#ifdef USE_HAL
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	process_trigger(1);
+}
+
+// This HAL function is called when the timer reaches its counter target - execute interrupt routine when this happens
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	sample_interrupt_occurred = true;
+}
+
+#else
+
+// Return variable tracking SysTick - used for LL function mimicking HAL_Delay()
+uint64_t get_SysTick(void)
+{
+	return SysTick_counter;
+}
+
+#endif

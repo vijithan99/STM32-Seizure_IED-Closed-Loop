@@ -891,7 +891,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef* hspi)
 
 
 // HAL calls this function when UART Tx has completed.
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef* UartHandle)
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart)
 {
 	if (huart == &hcom_uart[COM1]) {
 			uart_ready = true;
