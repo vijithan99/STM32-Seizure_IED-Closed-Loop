@@ -43,7 +43,7 @@
  * SPI acquisition = 5000 Hz.
  * Send every fifth sample for a 1000 Hz UART plot.
  */
-#define UART_STREAM_DECIMATION 5U
+#define UART_STREAM_DECIMATION 1U
 
 typedef struct __attribute__((packed))
 {

@@ -23,15 +23,15 @@ last_sequence = None
 report_time = time.monotonic()
 
 # 5000-Hz acquisition divided by UART_STREAM_DECIMATION=5.
-STREAM_FS = 1000
-DISPLAY_SECONDS = 3
+STREAM_FS = 5000
+DISPLAY_SECONDS = 5
 
 SYNC_VALUE = 0xA55A
 SYNC_BYTES = b"\x5A\xA5"       # STM32 little-endian representation
 FRAME = struct.Struct("<HHhh")  # sync, sequence, chA, chB
 
 serial_port = serial.Serial("COM4", 921600, timeout=1)
-time.sleep(10)
+time.sleep(5)
 
 data = serial_port.read(100)
 print("Bytes received:", len(data))
