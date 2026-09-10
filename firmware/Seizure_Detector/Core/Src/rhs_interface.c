@@ -473,7 +473,7 @@ void write_initial_reg_values(RHSConfigParameters* const p)
 				(i >= 80 && i <= 95)) {
 			continue;
 		}
-		send_spi_command(write_command(i, registers[i], false, false));
+		send_spi_command(write_command(i, registers[i], true, false));
 	}
 }
 

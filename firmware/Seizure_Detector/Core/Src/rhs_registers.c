@@ -811,9 +811,9 @@ void set_default_rhs_settings(RHSConfigParameters* const p)
 	// R[7]D[12:7]: RL_B sel2
 	// R[7]D[6:0]: RL_B sel1
 
-	set_upper_bandwidth(p, 7500.0);
+	set_upper_bandwidth(p, 1000.0);
 	set_lower_bandwidth(p, 1.0, false);
-	set_lower_bandwidth(p, 1000.0, true);
+	set_lower_bandwidth(p, 20.0, true);
 
 	// Register 8: Individual AC Amplifier Power
 	// D[15:0]: AC amp power
@@ -842,7 +842,7 @@ void set_default_rhs_settings(RHSConfigParameters* const p)
 
 	// Register 33: Stimulation Enable B
 	// D[15:0]: stim enable B
-	set_stim_enable(p, true);
+	set_stim_enable(p, false);
 
 	// Register 34: Stimulation Current Step Size
 	// D[15]: X (No Function)

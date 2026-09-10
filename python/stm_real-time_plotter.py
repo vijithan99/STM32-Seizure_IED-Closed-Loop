@@ -10,6 +10,9 @@ import struct
 import serial
 from serial.tools import list_ports
 
+import csv
+from pathlib import Path
+
 import time
 import numpy as np
 import pyqtgraph as pg
@@ -24,22 +27,44 @@ report_time = time.monotonic()
 
 # 5000-Hz acquisition divided by UART_STREAM_DECIMATION=5.
 STREAM_FS = 5000
-DISPLAY_SECONDS = 5
+DISPLAY_SECONDS = 10
 
 SYNC_VALUE = 0xA55A
 SYNC_BYTES = b"\x5A\xA5"       # STM32 little-endian representation
 FRAME = struct.Struct("<HHhh")  # sync, sequence, chA, chB
 
-serial_port = serial.Serial("COM4", 921600, timeout=1)
-time.sleep(5)
+CSV_PATH = Path(
+    f"rhs_capture_{time.strftime('%Y%m%d_%H%M%S')}.csv"
+)
 
-data = serial_port.read(100)
-print("Bytes received:", len(data))
-print("Raw data:", data.hex(" "))
+csv_file = CSV_PATH.open("w", newline="")
+csv_writer = csv.writer(csv_file)
 
-serial_port.close()
+csv_writer.writerow([
+    "received_index",
+    "stream_time_s",
+    "host_elapsed_s",
+    "sequence",
+    "missing_packets_before",
+    "channel_a_centered_counts",
+    "channel_b_centered_counts",
+    "channel_a_raw_u16",
+    "channel_b_raw_u16",
+    "channel_a_uV",
+    "channel_b_uV",
+])
+
+received_index = 0
+stream_index = 0
+total_missing = 0
+capture_start = time.monotonic()
 
 serial_port = serial.Serial(PORT, BAUD, timeout=0)
+serial_port.reset_input_buffer()
+
+print(f"Saving data to: {CSV_PATH.resolve()}")
+
+# serial_port = serial.Serial(PORT, BAUD, timeout=0)
 
 number_displayed = STREAM_FS * DISPLAY_SECONDS
 time_axis = np.arange(-number_displayed, 0) / STREAM_FS
@@ -88,7 +113,12 @@ def append_samples(destination, new_values):
 
 
 def update_plot():
-    global packet_count, last_sequence, report_time
+    global packet_count
+    global last_sequence
+    global report_time
+    global received_index
+    global stream_index
+    global total_missing
 
     available = serial_port.in_waiting
 
@@ -97,12 +127,13 @@ def update_plot():
 
     samples_a = []
     samples_b = []
+    csv_rows = []
 
     while len(receive_buffer) >= FRAME.size:
         sync_index = receive_buffer.find(SYNC_BYTES)
 
         if sync_index < 0:
-            # Preserve one byte in case it is the start of a split sync word.
+            # Preserve one byte in case it is the beginning of the sync word.
             del receive_buffer[:-1]
             break
 
@@ -113,9 +144,6 @@ def update_plot():
             break
 
         sync, sequence, ac_a, ac_b = FRAME.unpack_from(receive_buffer)
-        
-        packet_count += 1
-        last_sequence = sequence
 
         if sync != SYNC_VALUE:
             del receive_buffer[0]
@@ -123,9 +151,51 @@ def update_plot():
 
         del receive_buffer[:FRAME.size]
 
-        # Convert centered ADC counts into microvolts.
-        samples_a.append(ac_a * 0.195)
-        samples_b.append(ac_b * 0.195)
+        missing_packets = 0
+
+        if last_sequence is not None:
+            sequence_delta = (sequence - last_sequence) & 0xFFFF
+
+            if 0 < sequence_delta < 0x8000:
+                missing_packets = sequence_delta - 1
+                stream_index += sequence_delta
+                total_missing += missing_packets
+            else:
+                # Duplicate, out-of-order packet, or MCU sequence reset.
+                missing_packets = -1
+                stream_index += 1
+
+        # Recover the unsigned RHS ADC result from the centred int16.
+        raw_a = (ac_a + 32768) & 0xFFFF
+        raw_b = (ac_b + 32768) & 0xFFFF
+
+        voltage_a_uV = ac_a * 0.195
+        voltage_b_uV = ac_b * 0.195
+
+        samples_a.append(voltage_a_uV)
+        samples_b.append(voltage_b_uV)
+
+        csv_rows.append([
+            received_index,
+            stream_index / STREAM_FS,
+            time.monotonic() - capture_start,
+            sequence,
+            missing_packets,
+            ac_a,
+            ac_b,
+            raw_a,
+            raw_b,
+            voltage_a_uV,
+            voltage_b_uV,
+        ])
+
+        received_index += 1
+        packet_count += 1
+        last_sequence = sequence
+
+    if csv_rows:
+        # Write one batch rather than writing each sample separately.
+        csv_writer.writerows(csv_rows)
 
     if samples_a:
         append_samples(channel_a, samples_a)
@@ -133,15 +203,19 @@ def update_plot():
 
         curve_a.setData(time_axis, channel_a)
         curve_b.setData(time_axis, channel_b)
-    
+
     now = time.monotonic()
 
     if now - report_time >= 1.0:
+        csv_file.flush()
+
         print(
             f"Packets/s: {packet_count}, "
             f"last sequence: {last_sequence}, "
+            f"total missing: {total_missing}, "
             f"buffered bytes: {len(receive_buffer)}"
         )
+
         packet_count = 0
         report_time = now
 
@@ -154,4 +228,8 @@ timer.start(20)
 try:
     pg.exec()
 finally:
+    csv_file.flush()
+    csv_file.close()
     serial_port.close()
+
+    print(f"Capture saved to: {CSV_PATH.resolve()}")
