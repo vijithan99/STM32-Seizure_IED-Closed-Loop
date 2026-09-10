@@ -58,6 +58,47 @@ static volatile TransferState command_transfer_state = TRANSFER_COMPLETE;
 static volatile bool reception_in_progress = false;
 static int8_t prev_compliance_aux_slot = -1;
 
+static volatile uint32_t rom_checks = 0;
+static volatile uint32_t rom_errors[3] = {0};
+static volatile uint32_t rom_first_bad[3] = {0};
+
+static void check_streaming_rom(void)
+{
+    static uint8_t startup_sequences = 0;
+
+    /*
+     * Initial AUX commands are not yet fully populated.
+     * Skip the first two completed acquisition sequences.
+     */
+    if (startup_sequences < 2U) {
+        startup_sequences++;
+        return;
+    }
+
+    const uint32_t expected[3] = {
+        0x0000494EU,  /* Register 251 */
+        0x00005441U,  /* Register 252 */
+        0x00004E00U   /* Register 253 */
+    };
+
+    const uint32_t received[3] = {
+        command_sequence_MISO[19],
+        command_sequence_MISO[0],
+        command_sequence_MISO[1]
+    };
+
+    for (uint32_t i = 0; i < 3U; i++) {
+        rom_checks++;
+
+        if (received[i] != expected[i]) {
+            if (rom_errors[i] == 0U) {
+                rom_first_bad[i] = received[i];
+            }
+            rom_errors[i]++;
+        }
+    }
+}
+
 static inline bool extract_error_code_bit(ErrorCode error_code, int bit)
 {
 	return (error_code & (0b1 << bit)) >> bit;
@@ -190,6 +231,7 @@ static void spi_txrx_cplt_callback(void)
 
 		// Look for and process results of any compliance-monitor READ commands.
 //		process_compliance_data();
+		check_streaming_rom();
 
 		// Copy the MOSI commands currently in next_aux_commands into actual MOSI memory accessible via DMA.
 		copy_next_aux_commands_to_MOSI();

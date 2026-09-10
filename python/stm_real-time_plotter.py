@@ -6,6 +6,7 @@ Created on Tue Aug 18 12:42:50 2026
 """
 
 import struct
+import re
 
 import serial
 from serial.tools import list_ports
@@ -74,11 +75,38 @@ channel_b = np.zeros(number_displayed, dtype=np.float32)
 
 receive_buffer = bytearray()
 
+# -------------------------------------------------------------------------
+# RHS2116 ROM-test parsing
+# -------------------------------------------------------------------------
+
+ROM_REGISTER_RE = re.compile(
+    r"Register\s+(251|252|253|254|255):\s*0x([0-9A-Fa-f]+)"
+)
+
+ROM_ATTEMPT_RE = re.compile(
+    r"ROM test attempt\s+(\d+)"
+)
+
+ROM_RESULT_RE = re.compile(
+    r"ROM test:\s*(PASS|FAIL)"
+)
+
+rom_attempt = None
+rom_registers = {}
+rom_firmware_pass = None
+
 app = pg.mkQApp("RHS2116 Real-Time AC Viewer")
 
 plot = pg.plot(title="RHS2116 AC amplifier data")
+
+# Keep units fixed rather than allowing PyQtGraph to
+# automatically change s -> ms or µV -> mµV/kµV.
 plot.setLabel("bottom", "Time", units="s")
 plot.setLabel("left", "Electrode voltage", units="µV")
+
+plot.getAxis("bottom").enableAutoSIPrefix(False)
+plot.getAxis("left").enableAutoSIPrefix(False)
+
 plot.showGrid(x=True, y=True)
 plot.addLegend()
 
@@ -110,6 +138,200 @@ def append_samples(destination, new_values):
 
     destination[:-count] = destination[count:]
     destination[-count:] = np.asarray(new_values[-count:], dtype=np.float32)
+    
+    
+def check_rom_registers():
+    """
+    Independently verify the RHS2116 ROM response on the PC side.
+
+    Returns
+    -------
+    True
+        Complete ROM response is present and valid.
+    False
+        Complete ROM response is present but invalid.
+    None
+        Not all five ROM registers have been received yet.
+    """
+
+    required = {251, 252, 253, 254, 255}
+
+    if not required.issubset(rom_registers):
+        return None
+
+    return (
+        rom_registers[255] == 0x0020
+        and (rom_registers[254] & 0x00FF) == 0x0010
+        and rom_registers[253] == 0x4E00
+        and rom_registers[252] == 0x5441
+        and rom_registers[251] == 0x494E
+    )
+
+
+def print_rom_summary():
+    """Decode and print the RHS2116 ROM information."""
+
+    if not {251, 252, 253, 254, 255}.issubset(rom_registers):
+        return
+
+    chip_id = rom_registers[255]
+
+    revision_channels = rom_registers[254]
+    die_revision = (revision_channels >> 8) & 0xFF
+    number_channels = revision_channels & 0xFF
+
+    company_bytes = []
+
+    for register in (251, 252, 253):
+        value = rom_registers[register]
+
+        company_bytes.append((value >> 8) & 0xFF)
+        company_bytes.append(value & 0xFF)
+
+    company = (
+        bytes(company_bytes)
+        .rstrip(b"\x00")
+        .decode("ascii", errors="replace")
+    )
+
+    print()
+    print("========== RHS2116 ROM SUMMARY ==========")
+    print(f"Chip ID:        0x{chip_id:04X}")
+    print(f"Channels:       {number_channels}")
+    print(f"Die revision:   {die_revision}")
+    print(f"Manufacturer:   {company}")
+    print("=========================================")
+    print()
+
+
+def handle_mcu_text_line(line):
+    """
+    Handle human-readable UART output from the STM32.
+
+    This includes:
+        Starting RHS2116 SPI ROM test...
+        ROM test attempt 1...
+        Register 255: 0x0020
+        ...
+        ROM test: PASS
+    """
+
+    global rom_attempt
+    global rom_registers
+    global rom_firmware_pass
+
+    line = line.strip()
+
+    if not line:
+        return
+
+    print(f"[MCU] {line}")
+
+    # New ROM-test attempt.
+    match = ROM_ATTEMPT_RE.search(line)
+
+    if match:
+        rom_attempt = int(match.group(1))
+        rom_registers = {}
+
+        print(f"[ROM] Beginning attempt {rom_attempt}")
+        return
+
+    # ROM register result.
+    match = ROM_REGISTER_RE.search(line)
+
+    if match:
+        register = int(match.group(1))
+        value = int(match.group(2), 16)
+
+        rom_registers[register] = value
+        return
+
+    # Final MCU ROM result.
+    match = ROM_RESULT_RE.search(line)
+
+    if match:
+        rom_firmware_pass = match.group(1) == "PASS"
+
+        host_check = check_rom_registers()
+
+        print_rom_summary()
+
+        print(
+            f"[ROM] MCU result: "
+            f"{'PASS' if rom_firmware_pass else 'FAIL'}"
+        )
+
+        if host_check is None:
+            print(
+                "[ROM] PC verification unavailable "
+                "(not all ROM register lines were received)."
+            )
+
+        elif host_check:
+            print("[ROM] PC verification: PASS")
+
+        else:
+            print("[ROM] PC verification: FAIL")
+
+        # Update the graph title so ROM status is always visible.
+        if rom_firmware_pass and host_check is not False:
+            plot.setTitle(
+                "RHS2116 AC amplifier data — ROM TEST PASS"
+            )
+        else:
+            plot.setTitle(
+                "RHS2116 AC amplifier data — ROM TEST FAIL"
+            )
+
+
+def process_text_messages():
+    """
+    Consume complete ASCII diagnostic lines that appear before the next
+    binary RHS sample frame.
+
+    Binary sample frames always begin with 0xA55A.
+    """
+
+    while True:
+
+        sync_index = receive_buffer.find(SYNC_BYTES)
+        newline_index = receive_buffer.find(b"\n")
+
+        if newline_index < 0:
+            return
+
+        # If a binary frame begins before the newline, leave it for the
+        # binary frame parser.
+        if sync_index >= 0 and sync_index < newline_index:
+            return
+
+        raw_line = bytes(
+            receive_buffer[:newline_index + 1]
+        )
+
+        del receive_buffer[:newline_index + 1]
+
+        payload = raw_line.strip(b"\r\n")
+
+        if not payload:
+            continue
+
+        # Only interpret the data as text when it is predominantly
+        # printable ASCII. This prevents arbitrary ADC bytes from being
+        # interpreted as MCU messages.
+        printable = sum(
+            32 <= byte <= 126 or byte == 9
+            for byte in payload
+        )
+
+        if printable / len(payload) > 0.90:
+            line = payload.decode(
+                "ascii",
+                errors="replace"
+            )
+
+            handle_mcu_text_line(line)
 
 
 def update_plot():
@@ -129,26 +351,42 @@ def update_plot():
     samples_b = []
     csv_rows = []
 
-    while len(receive_buffer) >= FRAME.size:
-        sync_index = receive_buffer.find(SYNC_BYTES)
+    while receive_buffer:
 
-        if sync_index < 0:
-            # Preserve one byte in case it is the beginning of the sync word.
-            del receive_buffer[:-1]
-            break
-
-        if sync_index > 0:
-            del receive_buffer[:sync_index]
-
+        # First see whether the MCU sent us a complete text diagnostic
+        # message such as a ROM-test result.
+        process_text_messages()
+    
         if len(receive_buffer) < FRAME.size:
             break
-
+    
+        sync_index = receive_buffer.find(SYNC_BYTES)
+    
+        if sync_index < 0:
+    
+            # There may be a partial ASCII diagnostic message waiting for its
+            # newline, so don't immediately throw the whole buffer away.
+            #
+            # Only protect against pathological unlimited buffer growth.
+            if len(receive_buffer) > 65536:
+                del receive_buffer[:-1]
+    
+            break
+    
+        if sync_index > 0:
+            # Anything preceding a binary sync word that was not recognized
+            # as a diagnostic message is discarded.
+            del receive_buffer[:sync_index]
+    
+        if len(receive_buffer) < FRAME.size:
+            break
+    
         sync, sequence, ac_a, ac_b = FRAME.unpack_from(receive_buffer)
-
+    
         if sync != SYNC_VALUE:
             del receive_buffer[0]
             continue
-
+    
         del receive_buffer[:FRAME.size]
 
         missing_packets = 0
